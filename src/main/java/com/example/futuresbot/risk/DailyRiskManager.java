@@ -1,12 +1,15 @@
 package com.example.futuresbot.risk;
 
 import com.example.futuresbot.domain.PositionKey;
+import com.example.futuresbot.exchange.ExchangeGateway;
+import com.example.futuresbot.exchange.IncomeRecord;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
@@ -88,15 +91,24 @@ public final class DailyRiskManager {
             PositionKey key,
             BigDecimal currentEquityUsd,
             Instant now,
-            String closeReason) {
+            String closeReason,
+            ExchangeGateway exchangeGateway) {
         TrackedOpenPosition openPosition = trackedPositions.remove(key);
         if (openPosition == null) {
             return Optional.empty();
         }
 
-        BigDecimal exitEquity = sanitizeEquity(currentEquityUsd);
-        BigDecimal pnlUsd = exitEquity.subtract(openPosition.entryEquityUsd());
-        String outcome = pnlUsd.signum() < 0 ? "LOSS" : pnlUsd.signum() > 0 ? "WIN" : "FLAT";
+        List<IncomeRecord> incomeRecords = exchangeGateway.incomeHistory(
+                key.symbol(),
+                openPosition.openedAt(),
+                now);
+
+        BigDecimal grossRealizedPnl = sumIncome(incomeRecords, "REALIZED_PNL");
+        BigDecimal commission = sumIncome(incomeRecords, "COMMISSION");
+        BigDecimal fundingFee = sumIncome(incomeRecords, "FUNDING_FEE");
+        BigDecimal netPnl = grossRealizedPnl.add(commission).add(fundingFee);
+
+        String outcome = netPnl.signum() < 0 ? "LOSS" : netPnl.signum() > 0 ? "WIN" : "FLAT";
 
         if ("LOSS".equals(outcome)) {
             consecutiveLosses += 1;
@@ -109,14 +121,22 @@ public final class DailyRiskManager {
                 now,
                 key.symbol(),
                 key.side(),
-                openPosition.entryEquityUsd(),
-                exitEquity,
-                pnlUsd.setScale(8, RoundingMode.HALF_UP),
+                grossRealizedPnl.setScale(8, RoundingMode.HALF_UP),
+                commission.setScale(8, RoundingMode.HALF_UP),
+                fundingFee.setScale(8, RoundingMode.HALF_UP),
+                netPnl.setScale(8, RoundingMode.HALF_UP),
                 outcome,
                 openPosition.openSource(),
                 closeReason);
         journalWriter.append(record);
         return Optional.of(record);
+    }
+
+    private BigDecimal sumIncome(List<IncomeRecord> records, String incomeType) {
+        return records.stream()
+                .filter(record -> incomeType.equalsIgnoreCase(record.incomeType()))
+                .map(IncomeRecord::income)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
     private void rollDayIfNeeded(BigDecimal currentEquityUsd, Instant now) {

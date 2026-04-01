@@ -10,9 +10,10 @@ public record TradeJournalRecord(
         Instant closedAt,
         String symbol,
         PositionSide side,
-        BigDecimal entryEquityUsd,
-        BigDecimal exitEquityUsd,
-        BigDecimal pnlUsd,
+        BigDecimal grossRealizedPnlUsd,
+        BigDecimal commissionUsd,
+        BigDecimal fundingFeeUsd,
+        BigDecimal netPnlUsd,
         String outcome,
         String openSource,
         String closeReason) {
@@ -22,15 +23,16 @@ public record TradeJournalRecord(
                 closedAt.toString(),
                 symbol,
                 side.name(),
-                entryEquityUsd.toPlainString(),
-                exitEquityUsd.toPlainString(),
-                pnlUsd.toPlainString(),
+                grossRealizedPnlUsd.toPlainString(),
+                commissionUsd.toPlainString(),
+                fundingFeeUsd.toPlainString(),
+                netPnlUsd.toPlainString(),
                 outcome,
                 openSource,
                 closeReason.replace(",", ";"));
     }
 
     public static String csvHeader() {
-        return "openedAt,closedAt,symbol,side,entryEquityUsd,exitEquityUsd,pnlUsd,outcome,openSource,closeReason";
+        return "openedAt,closedAt,symbol,side,grossRealizedPnlUsd,commissionUsd,fundingFeeUsd,netPnlUsd,outcome,openSource,closeReason";
     }
 }

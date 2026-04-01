@@ -5,6 +5,8 @@ import com.example.futuresbot.execution.AccountEquitySnapshot;
 import com.example.futuresbot.strategy.SignalType;
 
 import java.math.BigDecimal;
+import java.time.Instant;
+import java.util.List;
 import java.util.function.Consumer;
 
 public interface ExchangeGateway extends AutoCloseable {
@@ -32,6 +34,8 @@ public interface ExchangeGateway extends AutoCloseable {
     void cancelAllOpenAlgoOrders(String symbol);
 
     String closePositionMarket(PositionKey key, BigDecimal quantity, String clientOrderId);
+
+    List<IncomeRecord> incomeHistory(String symbol, Instant startInclusive, Instant endInclusive);
 
     void connectUserStream(Consumer<UserStreamEvents.UserStreamEvent> consumer);
 

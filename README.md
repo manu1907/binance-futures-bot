@@ -1,10 +1,25 @@
 # Binance Futures Bot
 
-Bootstrap for a Java 21 Binance USDⓈ-M Futures bot that:
-- watches BTCUSDT, ETHUSDT, SOLUSDT
-- adopts manual interventions as exchange truth
-- will later add Elder-style multi-timeframe signals
-- starts in dry-run mode
+Java 21 Binance USDⓈ-M Futures bot for:
+
+- BTCUSDT, ETHUSDT, SOLUSDT
+- Binance Hedge Mode
+- manual intervention adoption
+- market data + signal evaluation
+- dry-run planning
+- demo/live execution path
+- protection order placement
+- lifecycle handling
+- risk halts
+- CSV trade journal
+
+## Current strategy
+
+The current strategy implementation is a multi-timeframe directional futures strategy running on:
+
+- 4h higher-timeframe regime
+- 1h setup filter
+- 15m trigger
 
 ## First run
 
@@ -12,12 +27,13 @@ Copy the example config:
 
 ```bash
 cp src/main/resources/application-example.yml src/main/resources/application.yml
-
 mvn compile
 mvn test
 mvn exec:java
 
-### src/main/resources/application-example.yml
+---
+
+### `src/main/resources/application-example.yml`
 ```yaml
 exchange:
   baseUrl: "https://fapi.binance.com"
@@ -36,3 +52,15 @@ trading:
   maxRiskPerTradePct: 0.5
   maxDailyDrawdownPct: 2.0
   maxOpenPositions: 1
+
+  effectiveCapitalUsd: 200.0
+  riskCapitalMode: "CAPPED_EQUITY"
+  minimumTradeNotionalUsd: 5.0
+  stopAtrMultiple: 1.5
+  takeProfitRiskReward: 2.0
+  entryCooldownSeconds: 120
+  oppositeSignalPolicy: "IGNORE"
+
+  maxConsecutiveLosses: 3
+  marketDataStaleSeconds: 90
+  journalCsvPath: "var/trade-journal.csv"

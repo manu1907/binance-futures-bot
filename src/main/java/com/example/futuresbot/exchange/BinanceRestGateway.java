@@ -180,6 +180,32 @@ public final class BinanceRestGateway implements ExchangeGateway {
         }
     }
 
+    @Override
+    public List<IncomeRecord> incomeHistory(String symbol, Instant startInclusive, Instant endInclusive) {
+        JsonNode json = httpClient.getSigned("/fapi/v1/income", Map.of(
+                "symbol", symbol,
+                "startTime", Long.toString(startInclusive.toEpochMilli()),
+                "endTime", Long.toString(endInclusive.toEpochMilli()),
+                "limit", "1000"));
+
+        List<IncomeRecord> records = new ArrayList<>();
+        if (!json.isArray()) {
+            return records;
+        }
+
+        for (JsonNode node : json) {
+            records.add(new IncomeRecord(
+                    node.path("symbol").asText(),
+                    node.path("incomeType").asText(),
+                    node.path("income").decimalValue(),
+                    node.path("asset").asText(),
+                    Instant.ofEpochMilli(node.path("time").asLong()),
+                    node.path("info").asText("")));
+        }
+
+        return records;
+    }
+
     private SymbolRules parseSymbolRules(JsonNode node) {
         BigDecimal minPrice = BigDecimal.ZERO;
         BigDecimal maxPrice = new BigDecimal("999999999");

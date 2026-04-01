@@ -378,9 +378,17 @@ public final class BotRuntime {
 
     private void recordPositionClose(PositionKey key, String closeReason) {
         BigDecimal equity = exchangeGateway.accountEquity().marginBalanceUsd();
-        dailyRiskManager.onPositionClosed(key, equity, Instant.now(), closeReason)
-                .ifPresent(record -> log.info("Journaled trade symbol={} side={} pnl={} outcome={} reason={} record={}",
-                        record.symbol(), record.side(), record.pnlUsd(), record.outcome(), record.closeReason()));
+        dailyRiskManager.onPositionClosed(key, equity, Instant.now(), closeReason, exchangeGateway)
+                .ifPresent(record -> log.info(
+                        "Journaled trade symbol={} side={} grossRealized={} commission={} funding={} netPnl={} outcome={} reason={}",
+                        record.symbol(),
+                        record.side(),
+                        record.grossRealizedPnlUsd(),
+                        record.commissionUsd(),
+                        record.fundingFeeUsd(),
+                        record.netPnlUsd(),
+                        record.outcome(),
+                        record.closeReason()));
     }
 
     private void attemptProtectionRepair(
