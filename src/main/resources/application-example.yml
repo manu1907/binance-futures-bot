@@ -1,0 +1,17 @@
+exchange:
+  baseUrl: "https://fapi.binance.com"
+  wsBaseUrl: "wss://fstream.binance.com"
+  apiKey: "${BINANCE_API_KEY:}"
+  apiSecret: "${BINANCE_API_SECRET:}"
+  useTestnet: true
+  hedgeModeRequired: true
+
+trading:
+  symbols: ["BTCUSDT", "ETHUSDT", "SOLUSDT"]
+  activeSymbolLimit: 1
+  dryRun: true
+  adoptionMode: "ADOPT_AND_CONTINUE"
+  defaultLeverage: 2
+  maxRiskPerTradePct: 0.5
+  maxDailyDrawdownPct: 2.0
+  maxOpenPositions: 1

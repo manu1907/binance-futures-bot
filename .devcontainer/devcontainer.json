@@ -1,0 +1,17 @@
+{
+  "name": "binance-futures-bot",
+  "build": {
+    "dockerfile": "Dockerfile"
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "vscjava.vscode-java-pack",
+        "redhat.vscode-xml",
+        "eamodio.gitlens"
+      ]
+    }
+  },
+  "postCreateCommand": "mvn -q -DskipTests compile",
+  "remoteUser": "vscode"
+}
