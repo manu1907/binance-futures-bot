@@ -1,7 +1,0 @@
-/workspaces/binance-futures-bot/src/test/java/com/example/futuresbot/exchange/SymbolRulesTest.java
-/workspaces/binance-futures-bot/src/test/java/com/example/futuresbot/execution/PositionLifecycleManagerTest.java
-/workspaces/binance-futures-bot/src/test/java/com/example/futuresbot/execution/RiskSizerTest.java
-/workspaces/binance-futures-bot/src/test/java/com/example/futuresbot/execution/TradeGuardrailsTest.java
-/workspaces/binance-futures-bot/src/test/java/com/example/futuresbot/reconcile/ManualInterventionDetectorTest.java
-/workspaces/binance-futures-bot/src/test/java/com/example/futuresbot/reconcile/PositionReconcilerTest.java
-/workspaces/binance-futures-bot/src/test/java/com/example/futuresbot/risk/DailyRiskManagerTest.java
