@@ -15,11 +15,11 @@ Java 21 Binance USDⓈ-M Futures bot for:
 
 ## Current strategy
 
-The current strategy implementation is a multi-timeframe directional futures strategy running on:
+The current strategy implementation is a strict Elder Triple Screen style directional futures strategy running on:
 
-- 4h higher-timeframe regime
-- 1h setup filter
-- 15m trigger
+- 4h first screen (trend / tide)
+- 1h second screen (counter-trend pullback / bounce)
+- 15m third screen (trigger)
 
 ## First run
 
@@ -31,7 +31,6 @@ mvn compile
 mvn test
 mvn exec:java
 
----
 
 ### `src/main/resources/application-example.yml`
 ```yaml
