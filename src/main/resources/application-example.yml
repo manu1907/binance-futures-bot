@@ -15,3 +15,15 @@ trading:
   maxRiskPerTradePct: 0.5
   maxDailyDrawdownPct: 2.0
   maxOpenPositions: 1
+
+  effectiveCapitalUsd: 200.0
+  riskCapitalMode: "CAPPED_EQUITY"
+  minimumTradeNotionalUsd: 5.0
+  stopAtrMultiple: 1.5
+  takeProfitRiskReward: 2.0
+  entryCooldownSeconds: 120
+  oppositeSignalPolicy: "IGNORE"
+
+  maxConsecutiveLosses: 3
+  marketDataStaleSeconds: 90
+  journalCsvPath: "var/trade-journal.csv"
