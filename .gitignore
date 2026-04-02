@@ -5,3 +5,4 @@ target/
 .env
 application.yml
 var/
+deploy/application.yml

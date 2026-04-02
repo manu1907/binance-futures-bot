@@ -28,39 +28,6 @@ public final class IndicatorMath {
         return ema;
     }
 
-    public static double rsi(List<Candle> candles, int period) {
-        if (candles.size() <= period) {
-            throw new IllegalArgumentException("Not enough candles for RSI period=" + period);
-        }
-
-        int start = candles.size() - period;
-        double gains = 0.0d;
-        double losses = 0.0d;
-
-        for (int index = start; index < candles.size(); index++) {
-            double previous = candles.get(index - 1).close().doubleValue();
-            double current = candles.get(index).close().doubleValue();
-            double change = current - previous;
-            if (change >= 0) {
-                gains += change;
-            } else {
-                losses += Math.abs(change);
-            }
-        }
-
-        if (losses == 0.0d) {
-            return 100.0d;
-        }
-        if (gains == 0.0d) {
-            return 0.0d;
-        }
-
-        double averageGain = gains / period;
-        double averageLoss = losses / period;
-        double rs = averageGain / averageLoss;
-        return 100.0d - (100.0d / (1.0d + rs));
-    }
-
     public static double atr(List<Candle> candles, int period) {
         if (candles.size() <= period) {
             throw new IllegalArgumentException("Not enough candles for ATR period=" + period);

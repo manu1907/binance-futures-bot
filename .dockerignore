@@ -1,0 +1,10 @@
+.git
+.github
+.devcontainer
+.idea
+.vscode
+target
+var
+logs
+.env
+deploy/application.yml

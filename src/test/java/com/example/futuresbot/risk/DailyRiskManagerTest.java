@@ -166,8 +166,7 @@ class DailyRiskManagerTest {
             throw new UnsupportedOperationException();
         }
 
-        @Override
-        public void ensureProtectionFor(PositionKey key) {
+        public void setLeverage(String symbol, int leverage) {
             throw new UnsupportedOperationException();
         }
     }

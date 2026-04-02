@@ -39,7 +39,7 @@ public interface ExchangeGateway extends AutoCloseable {
 
     void connectUserStream(Consumer<UserStreamEvents.UserStreamEvent> consumer);
 
-    void ensureProtectionFor(PositionKey key);
+    void setLeverage(String symbol, int leverage);
 
     @Override
     default void close() {

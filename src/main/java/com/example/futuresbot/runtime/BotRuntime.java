@@ -137,6 +137,13 @@ public final class BotRuntime {
             throw new IllegalStateException(
                     "Bot requires Binance hedge mode, but account is currently in one-way mode");
         }
+
+        int leverage = config.trading().defaultLeverage();
+        if (leverage > 0) {
+            for (String symbol : config.trading().symbols()) {
+                exchangeGateway.setLeverage(symbol, leverage);
+            }
+        }
     }
 
     private void logStartupRecoverySummary(ExchangeSnapshot snapshot) {

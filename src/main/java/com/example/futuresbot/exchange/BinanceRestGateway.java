@@ -168,8 +168,11 @@ public final class BinanceRestGateway implements ExchangeGateway {
     }
 
     @Override
-    public void ensureProtectionFor(PositionKey key) {
-        log.info("Protection repair hook not implemented at gateway level for {}.", key);
+    public void setLeverage(String symbol, int leverage) {
+        httpClient.postSigned("/fapi/v1/leverage", Map.of(
+                "symbol", symbol,
+                "leverage", String.valueOf(leverage)));
+        log.info("Leverage set: symbol={} leverage={}x", symbol, leverage);
     }
 
     @Override

@@ -8,7 +8,7 @@ exchange:
 
 trading:
   symbols: ["BTCUSDT", "ETHUSDT", "SOLUSDT"]
-  dryRun: true
+  dryRun: false
   adoptionMode: "ADOPT_AND_CONTINUE"
   defaultLeverage: 2
   maxRiskPerTradePct: 0.5
@@ -26,7 +26,7 @@ trading:
   maxConsecutiveLosses: 3
   marketDataStaleSeconds: 90
   journalCsvPath: "var/trade-journal.csv"
-  
+
 replay:
   symbols: ["BTCUSDT", "ETHUSDT", "SOLUSDT"]
   from: "2025-01-01T00:00:00Z"
