@@ -98,7 +98,8 @@ class BotRuntimeDryRunFlowTest {
                         OppositeSignalPolicy.IGNORE,
                         3,
                         300,
-                        tempDir.resolve("trade-journal.csv").toString()),
+                        tempDir.resolve("trade-journal.csv").toString(),
+                        disabledExitManagement()),
                 new AppConfig.ReplayConfig(
                         List.of(SYMBOL),
                         "2025-01-01T00:00:00Z",
@@ -106,6 +107,19 @@ class BotRuntimeDryRunFlowTest {
                         200.0,
                         4.0,
                         tempDir.resolve("replay-trades.csv").toString()));
+    }
+
+    private static AppConfig.ExitManagementConfig disabledExitManagement() {
+        return new AppConfig.ExitManagementConfig(
+                false,
+                1.0,
+                1.5,
+                3,
+                0.25,
+                1.5,
+                0.5,
+                4.0
+        );
     }
 
     private static List<Candle> bullish4hBars() {
@@ -211,9 +225,15 @@ class BotRuntimeDryRunFlowTest {
         private int cancelAllOpenOrdersCalls;
         private int cancelAllOpenAlgoOrdersCalls;
         private int closePositionMarketCalls;
+        private int cancelAlgoOrderCalls;
 
         @SuppressWarnings("unused")
         private Consumer<UserStreamEvents.UserStreamEvent> userStreamConsumer;
+
+        @Override
+        public void cancelAlgoOrder(String clientAlgoId) {
+            cancelAlgoOrderCalls++;
+        }
 
         @Override
         public ExchangeSnapshot currentSnapshot() {

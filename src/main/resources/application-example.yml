@@ -7,14 +7,13 @@ exchange:
   hedgeModeRequired: true
 
 trading:
-  symbols: ["BTCUSDT", "ETHUSDT", "SOLUSDT"]
-  dryRun: true
+  symbols: [ "BTCUSDT", "ETHUSDT", "SOLUSDT" ]
+  dryRun: false
   adoptionMode: "ADOPT_AND_CONTINUE"
   defaultLeverage: 2
   maxRiskPerTradePct: 0.5
   maxDailyDrawdownPct: 2.0
   maxOpenPositions: 1
-
   effectiveCapitalUsd: 200.0
   riskCapitalMode: "CAPPED_EQUITY"
   minimumTradeNotionalUsd: 5.0
@@ -22,13 +21,21 @@ trading:
   takeProfitRiskReward: 2.0
   entryCooldownSeconds: 120
   oppositeSignalPolicy: "IGNORE"
-
   maxConsecutiveLosses: 3
   marketDataStaleSeconds: 90
   journalCsvPath: "var/trade-journal.csv"
-  
+  exitManagement:
+    enabled: true
+    breakEvenAfterR: 1.0
+    trailingStopActivationR: 1.5
+    trailingSwingLookbackBars: 3
+    trailingStopAtrBuffer: 0.25
+    extendTakeProfitActivationR: 1.5
+    extendTakeProfitStepR: 0.5
+    maxTakeProfitRiskReward: 4.0
+
 replay:
-  symbols: ["BTCUSDT", "ETHUSDT", "SOLUSDT"]
+  symbols: [ "BTCUSDT", "ETHUSDT", "SOLUSDT" ]
   from: "2025-01-01T00:00:00Z"
   to: "2025-03-31T23:59:59Z"
   initialEquityUsd: 200.0

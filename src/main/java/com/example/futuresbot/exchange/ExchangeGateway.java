@@ -41,6 +41,8 @@ public interface ExchangeGateway extends AutoCloseable {
 
     void setLeverage(String symbol, int leverage);
 
+    void cancelAlgoOrder(String clientAlgoId);
+
     @Override
     default void close() {
         // default no-op

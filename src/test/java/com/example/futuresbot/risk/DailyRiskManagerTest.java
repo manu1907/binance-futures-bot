@@ -90,6 +90,8 @@ class DailyRiskManagerTest {
     }
 
     private static final class TestExchangeGateway implements ExchangeGateway {
+        private int cancelAlgoOrderCalls;
+
         private final List<IncomeRecord> incomeRecords;
 
         private TestExchangeGateway(List<IncomeRecord> incomeRecords) {
@@ -123,7 +125,7 @@ class DailyRiskManagerTest {
 
         @Override
         public String placeEntryMarketOrder(String symbol, SignalType signalType, BigDecimal quantity,
-                String clientOrderId) {
+                                            String clientOrderId) {
             throw new UnsupportedOperationException();
         }
 
@@ -168,6 +170,11 @@ class DailyRiskManagerTest {
 
         public void setLeverage(String symbol, int leverage) {
             throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public void cancelAlgoOrder(String clientAlgoId) {
+            cancelAlgoOrderCalls++;
         }
     }
 }

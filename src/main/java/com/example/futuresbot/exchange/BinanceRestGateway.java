@@ -14,6 +14,7 @@ import org.slf4j.LoggerFactory;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -103,7 +104,7 @@ public final class BinanceRestGateway implements ExchangeGateway {
 
     @Override
     public String placeEntryMarketOrder(String symbol, SignalType signalType, BigDecimal quantity,
-            String clientOrderId) {
+                                        String clientOrderId) {
         JsonNode response = httpClient.postSigned("/fapi/v1/order", Map.of(
                 "symbol", symbol,
                 "side", entrySide(signalType),
@@ -208,6 +209,17 @@ public final class BinanceRestGateway implements ExchangeGateway {
         }
 
         return records;
+    }
+
+    @Override
+    public void cancelAlgoOrder(String clientAlgoId) {
+        if (clientAlgoId == null || clientAlgoId.isBlank()) {
+            return;
+        }
+
+        Map<String, String> params = new LinkedHashMap<>();
+        params.put("clientAlgoId", clientAlgoId);
+        httpClient.deleteSigned("/fapi/v1/algoOrder", params);
     }
 
     private SymbolRules parseSymbolRules(JsonNode node) {

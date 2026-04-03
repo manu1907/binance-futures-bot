@@ -10,13 +10,16 @@ import com.example.futuresbot.exchange.ExchangeGateway;
 import com.example.futuresbot.exchange.ExchangeSnapshot;
 import com.example.futuresbot.exchange.UserStreamEvents;
 import com.example.futuresbot.execution.AccountEquitySnapshot;
+import com.example.futuresbot.execution.ActiveProtectionState;
 import com.example.futuresbot.execution.ExecutionPlanner;
 import com.example.futuresbot.execution.ExecutionService;
 import com.example.futuresbot.execution.GuardrailDecision;
 import com.example.futuresbot.execution.LifecycleDecision;
 import com.example.futuresbot.execution.OrderPlan;
 import com.example.futuresbot.execution.PlacementResult;
+import com.example.futuresbot.execution.PositionExitManager;
 import com.example.futuresbot.execution.PositionLifecycleManager;
+import com.example.futuresbot.execution.PositionManagementDecision;
 import com.example.futuresbot.execution.RiskSizer;
 import com.example.futuresbot.execution.TradeGuardrails;
 import com.example.futuresbot.marketdata.BinanceMarketDataService;
@@ -61,38 +64,91 @@ public final class BotRuntime {
     private final AppConfig config;
     private final ExchangeGateway exchangeGateway;
     private final MarketDataService marketDataService;
-    private final PositionReconciler reconciler = new PositionReconciler();
-    private final ManualInterventionDetector manualDetector = new ManualInterventionDetector();
+    private final PositionReconciler reconciler;
+    private final ManualInterventionDetector manualDetector;
     private final Map<PositionKey, ManagedPosition> managedPositions = new ConcurrentHashMap<>();
     private final Map<PositionKey, OrderPlan> latestAcceptedPlanByKey = new ConcurrentHashMap<>();
     private final Set<String> knownBotClientOrderIds = ConcurrentHashMap.newKeySet();
     private final Set<String> knownBotClientAlgoIds = ConcurrentHashMap.newKeySet();
-    private final InMemoryMarketDataBuffer marketDataBuffer = new InMemoryMarketDataBuffer(500);
-    private final TradingStrategy strategy = new ElderTripleScreenStrategy();
-    private final ExecutionPlanner executionPlanner = new ExecutionPlanner(new RiskSizer());
-    private final ExecutionService executionService = new ExecutionService();
-    private final TradeGuardrails tradeGuardrails = new TradeGuardrails();
-    private final PositionLifecycleManager lifecycleManager = new PositionLifecycleManager();
+    private final InMemoryMarketDataBuffer marketDataBuffer;
+    private final TradingStrategy strategy;
+    private final ExecutionPlanner executionPlanner;
+    private final ExecutionService executionService;
+    private final TradeGuardrails tradeGuardrails;
+    private final PositionLifecycleManager lifecycleManager;
     private final Map<String, Instant> lastSignalBarCloseBySymbol = new ConcurrentHashMap<>();
     private final Map<String, Instant> lastTradeActivityBySymbol = new ConcurrentHashMap<>();
     private final ScheduledExecutorService riskScheduler = Executors.newSingleThreadScheduledExecutor();
     private final AtomicReference<Instant> lastMarketDataEventAt = new AtomicReference<>(Instant.EPOCH);
     private final DailyRiskManager dailyRiskManager;
+    private final PositionExitManager positionExitManager = new PositionExitManager();
+    private final Map<PositionKey, ActiveProtectionState> activeProtectionByKey = new ConcurrentHashMap<>();
 
     private volatile String tradingHaltReason;
 
     public BotRuntime(AppConfig config) {
-        this(config, new BinanceRestGateway(config), new BinanceMarketDataService(config.exchange()));
+        this(
+                config,
+                new BinanceRestGateway(config),
+                new BinanceMarketDataService(config.exchange()),
+                new PositionReconciler(),
+                new ManualInterventionDetector(),
+                new InMemoryMarketDataBuffer(500),
+                new ElderTripleScreenStrategy(),
+                new ExecutionPlanner(new RiskSizer()),
+                new ExecutionService(),
+                new TradeGuardrails(),
+                new PositionLifecycleManager(),
+                new DailyRiskManager(
+                        config.trading().maxDailyDrawdownPct(),
+                        config.trading().maxConsecutiveLosses(),
+                        new TradeJournalCsvWriter(config.trading().journalCsvPath())));
     }
 
     public BotRuntime(AppConfig config, ExchangeGateway exchangeGateway, MarketDataService marketDataService) {
+        this(
+                config,
+                exchangeGateway,
+                marketDataService,
+                new PositionReconciler(),
+                new ManualInterventionDetector(),
+                new InMemoryMarketDataBuffer(500),
+                new ElderTripleScreenStrategy(),
+                new ExecutionPlanner(new RiskSizer()),
+                new ExecutionService(),
+                new TradeGuardrails(),
+                new PositionLifecycleManager(),
+                new DailyRiskManager(
+                        config.trading().maxDailyDrawdownPct(),
+                        config.trading().maxConsecutiveLosses(),
+                        new TradeJournalCsvWriter(config.trading().journalCsvPath())));
+    }
+
+    BotRuntime(
+            AppConfig config,
+            ExchangeGateway exchangeGateway,
+            MarketDataService marketDataService,
+            PositionReconciler reconciler,
+            ManualInterventionDetector manualDetector,
+            InMemoryMarketDataBuffer marketDataBuffer,
+            TradingStrategy strategy,
+            ExecutionPlanner executionPlanner,
+            ExecutionService executionService,
+            TradeGuardrails tradeGuardrails,
+            PositionLifecycleManager lifecycleManager,
+            DailyRiskManager dailyRiskManager) {
         this.config = config;
         this.exchangeGateway = exchangeGateway;
         this.marketDataService = marketDataService;
-        this.dailyRiskManager = new DailyRiskManager(
-                config.trading().maxDailyDrawdownPct(),
-                config.trading().maxConsecutiveLosses(),
-                new TradeJournalCsvWriter(config.trading().journalCsvPath()));
+        this.reconciler = reconciler;
+        this.manualDetector = manualDetector;
+        this.marketDataBuffer = marketDataBuffer;
+        this.strategy = strategy;
+        this.executionPlanner = executionPlanner;
+        this.executionService = executionService;
+        this.tradeGuardrails = tradeGuardrails;
+        this.lifecycleManager = lifecycleManager;
+        this.dailyRiskManager = dailyRiskManager;
     }
 
     public void start() {
@@ -169,20 +225,105 @@ public final class BotRuntime {
     }
 
     private void onCandle(Candle candle) {
-        lastMarketDataEventAt.set(Instant.now());
-        marketDataBuffer.apply(candle);
+        this.lastMarketDataEventAt.set(Instant.now());
+        this.marketDataBuffer.apply(candle);
 
         if (!candle.closed() || candle.interval() != CandleInterval.MINUTES_15) {
             return;
         }
 
-        Instant previousProcessed = lastSignalBarCloseBySymbol.put(candle.symbol(), candle.closeTime());
+        Instant previousProcessed = this.lastSignalBarCloseBySymbol.put(candle.symbol(), candle.closeTime());
         if (candle.closeTime().equals(previousProcessed)) {
             return;
         }
 
-        StrategyContext context = StrategyContext.fromBuffer(candle.symbol(), marketDataBuffer, STRATEGY_INTERVALS);
-        strategy.evaluate(context).ifPresent(signal -> onSignal(signal, context));
+        this.manageOpenPositions(candle.symbol());
+
+        StrategyContext context = StrategyContext.fromBuffer(candle.symbol(), this.marketDataBuffer, STRATEGY_INTERVALS);
+        this.strategy.evaluate(context).ifPresent(signal -> onSignal(signal, context));
+    }
+
+    private void manageOpenPositions(String symbol) {
+        if (this.config.trading().dryRun() || !this.config.trading().exitManagement().enabled()) {
+            return;
+        }
+
+        StrategyContext context = StrategyContext.fromBuffer(symbol, this.marketDataBuffer, STRATEGY_INTERVALS);
+
+        this.manageOpenPosition(new PositionKey(symbol, PositionSide.LONG), context);
+        this.manageOpenPosition(new PositionKey(symbol, PositionSide.SHORT), context);
+    }
+
+    private void manageOpenPosition(PositionKey key, StrategyContext context) {
+        ManagedPosition managed = this.managedPositions.get(key);
+        if (managed == null || !managed.snapshot().isOpen()) {
+            return;
+        }
+
+        OrderPlan entryPlan = this.latestAcceptedPlanByKey.get(key);
+        ActiveProtectionState currentProtection = this.activeProtectionByKey.get(key);
+
+        PositionManagementDecision decision = this.positionExitManager.evaluate(
+                key,
+                managed.snapshot(),
+                entryPlan,
+                currentProtection,
+                context,
+                config.trading().exitManagement());
+
+        if (!decision.updateRequired()) {
+            return;
+        }
+
+        this.replaceProtection(key, decision);
+    }
+
+    private void replaceProtection(PositionKey key, PositionManagementDecision decision) {
+        ActiveProtectionState current = this.activeProtectionByKey.get(key);
+        if (current == null) {
+            return;
+        }
+
+        if (current.stopClientAlgoId() != null && !current.stopClientAlgoId().isBlank()) {
+            this.exchangeGateway.cancelAlgoOrder(current.stopClientAlgoId());
+        }
+        if (current.takeProfitClientAlgoId() != null && !current.takeProfitClientAlgoId().isBlank()) {
+            this.exchangeGateway.cancelAlgoOrder(current.takeProfitClientAlgoId());
+        }
+
+        SignalType signalType = key.side() == PositionSide.LONG ? SignalType.LONG_ENTRY : SignalType.SHORT_ENTRY;
+
+        String stopClientAlgoId = this.exchangeGateway.placeProtectiveAlgoOrder(
+                key.symbol(),
+                signalType,
+                decision.newStopTriggerPrice(),
+                false,
+                "BOT_TRAIL_STOP_" + System.currentTimeMillis());
+
+        String tpClientAlgoId = this.exchangeGateway.placeProtectiveAlgoOrder(
+                key.symbol(),
+                signalType,
+                decision.newTakeProfitTriggerPrice(),
+                true,
+                "BOT_TRAIL_TP_" + System.currentTimeMillis());
+
+        this.rememberBotClientAlgoId(stopClientAlgoId);
+        this.rememberBotClientAlgoId(tpClientAlgoId);
+
+        this.activeProtectionByKey.put(key, new ActiveProtectionState(
+                decision.newStopTriggerPrice(),
+                decision.newTakeProfitTriggerPrice(),
+                stopClientAlgoId,
+                tpClientAlgoId,
+                Instant.now()));
+
+        this.markTradeActivity(key.symbol(), Instant.now());
+
+        log.info("Protection updated for {} stop={} tp={} reason={}",
+                key,
+                decision.newStopTriggerPrice(),
+                decision.newTakeProfitTriggerPrice(),
+                decision.reason());
     }
 
     private void onSignal(TradeSignal signal, StrategyContext context) {
@@ -285,6 +426,12 @@ public final class BotRuntime {
         }
 
         latestAcceptedPlanByKey.put(desiredKey, plan);
+        activeProtectionByKey.put(desiredKey, new ActiveProtectionState(
+                placement.stopTriggerPrice(),
+                placement.takeProfitTriggerPrice(),
+                placement.stopClientAlgoId(),
+                placement.takeProfitClientAlgoId(),
+                Instant.now()));
         rememberBotClientOrderId(placement.entryClientOrderId());
         rememberBotClientAlgoId(placement.stopClientAlgoId());
         rememberBotClientAlgoId(placement.takeProfitClientAlgoId());
@@ -380,6 +527,7 @@ public final class BotRuntime {
                 }
                 managedPositions.remove(key);
                 latestAcceptedPlanByKey.remove(key);
+                activeProtectionByKey.remove(key);
                 log.info("{} -> CLEAR_INTERNAL_POSITION ({})", key, decision.reason());
             }
         }
@@ -431,8 +579,21 @@ public final class BotRuntime {
             return;
         }
 
+        ActiveProtectionState existingProtection = activeProtectionByKey.get(key);
+
+        String stopClientAlgoId = existingProtection != null ? existingProtection.stopClientAlgoId() : null;
+        String tpClientAlgoId = existingProtection != null ? existingProtection.takeProfitClientAlgoId() : null;
+
+        BigDecimal stopTriggerPrice = existingProtection != null && !missingStop
+                ? existingProtection.stopTriggerPrice()
+                : plan.stopPrice();
+
+        BigDecimal takeProfitTriggerPrice = existingProtection != null && !missingTakeProfit
+                ? existingProtection.takeProfitTriggerPrice()
+                : plan.takeProfitPrice();
+
         if (missingStop) {
-            String stopClientAlgoId = exchangeGateway.placeProtectiveAlgoOrder(
+            stopClientAlgoId = exchangeGateway.placeProtectiveAlgoOrder(
                     key.symbol(),
                     plan.signalType(),
                     plan.stopPrice(),
@@ -442,7 +603,7 @@ public final class BotRuntime {
         }
 
         if (missingTakeProfit) {
-            String tpClientAlgoId = exchangeGateway.placeProtectiveAlgoOrder(
+            tpClientAlgoId = exchangeGateway.placeProtectiveAlgoOrder(
                     key.symbol(),
                     plan.signalType(),
                     plan.takeProfitPrice(),
@@ -451,9 +612,16 @@ public final class BotRuntime {
             rememberBotClientAlgoId(tpClientAlgoId);
         }
 
+        activeProtectionByKey.put(key, new ActiveProtectionState(
+                stopTriggerPrice,
+                takeProfitTriggerPrice,
+                stopClientAlgoId,
+                tpClientAlgoId,
+                Instant.now()));
+
         markTradeActivity(key.symbol(), Instant.now());
-        log.info("Protection repair sent for {} missingStop={} missingTakeProfit={}", key, missingStop,
-                missingTakeProfit);
+        log.info("Protection repair sent for {} missingStop={} missingTakeProfit={}",
+                key, missingStop, missingTakeProfit);
     }
 
     private boolean isPlanCompatible(PositionSnapshot snapshot, OrderPlan plan) {
