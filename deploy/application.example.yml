@@ -8,7 +8,6 @@ exchange:
 
 trading:
   symbols: ["BTCUSDT", "ETHUSDT", "SOLUSDT"]
-  activeSymbolLimit: 1
   dryRun: true
   adoptionMode: "ADOPT_AND_CONTINUE"
   defaultLeverage: 2
