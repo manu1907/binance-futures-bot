@@ -11,6 +11,7 @@ import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -35,12 +36,12 @@ public final class DailyRiskManager {
     }
 
     public synchronized void initialize(BigDecimal currentEquityUsd, Instant now) {
-        currentDay = LocalDate.ofInstant(now, RISK_ZONE);
-        dayStartEquityUsd = sanitizeEquity(currentEquityUsd);
-        consecutiveLosses = 0;
-        if (haltType == HaltType.RISK_LIMIT) {
-            haltType = HaltType.NONE;
-            haltReason = null;
+        this.currentDay = LocalDate.ofInstant(now, RISK_ZONE);
+        this.dayStartEquityUsd = this.sanitizeEquity(currentEquityUsd);
+        this.consecutiveLosses = 0;
+        if (this.haltType == HaltType.RISK_LIMIT) {
+            this.haltType = HaltType.NONE;
+            this.haltReason = null;
         }
     }
 
@@ -153,7 +154,7 @@ public final class DailyRiskManager {
     }
 
     private BigDecimal sanitizeEquity(BigDecimal value) {
-        return value == null ? BigDecimal.ZERO : value.max(BigDecimal.ZERO);
+        return Objects.isNull(value) ? BigDecimal.ZERO : value.max(BigDecimal.ZERO);
     }
 
     private enum HaltType {

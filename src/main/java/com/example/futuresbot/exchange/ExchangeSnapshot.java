@@ -11,8 +11,8 @@ public record ExchangeSnapshot(
         List<OpenOrderSnapshot> openOrders,
         List<AlgoOrderSnapshot> openAlgoOrders) {
     public Optional<PositionSnapshot> findPosition(PositionKey key) {
-        return positions.stream()
-                .filter(p -> p.symbol().equals(key.symbol()) && p.side() == key.side() && !p.isFlat())
+        return this.positions.stream()
+                .filter(p -> p.symbol().equals(key.symbol()) && p.side() == key.side() && p.isOpen())
                 .findFirst();
     }
 

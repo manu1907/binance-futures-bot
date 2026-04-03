@@ -14,7 +14,7 @@ public record PositionSnapshot(
         boolean hasProtectiveStop,
         boolean hasTakeProfit,
         Instant updateTime) {
-    public boolean isFlat() {
-        return quantity == null || quantity.signum() == 0;
+    public boolean isOpen() {
+        return quantity != null && quantity.signum() != 0;
     }
 }

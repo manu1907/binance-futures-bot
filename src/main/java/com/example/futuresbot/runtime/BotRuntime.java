@@ -5,6 +5,10 @@ import com.example.futuresbot.domain.ManagedPosition;
 import com.example.futuresbot.domain.PositionKey;
 import com.example.futuresbot.domain.PositionSide;
 import com.example.futuresbot.domain.PositionSnapshot;
+import com.example.futuresbot.exchange.BinanceRestGateway;
+import com.example.futuresbot.exchange.ExchangeGateway;
+import com.example.futuresbot.exchange.ExchangeSnapshot;
+import com.example.futuresbot.exchange.UserStreamEvents;
 import com.example.futuresbot.execution.AccountEquitySnapshot;
 import com.example.futuresbot.execution.ExecutionPlanner;
 import com.example.futuresbot.execution.ExecutionService;
@@ -15,10 +19,6 @@ import com.example.futuresbot.execution.PlacementResult;
 import com.example.futuresbot.execution.PositionLifecycleManager;
 import com.example.futuresbot.execution.RiskSizer;
 import com.example.futuresbot.execution.TradeGuardrails;
-import com.example.futuresbot.exchange.BinanceRestGateway;
-import com.example.futuresbot.exchange.ExchangeGateway;
-import com.example.futuresbot.exchange.ExchangeSnapshot;
-import com.example.futuresbot.exchange.UserStreamEvents;
 import com.example.futuresbot.marketdata.BinanceMarketDataService;
 import com.example.futuresbot.marketdata.Candle;
 import com.example.futuresbot.marketdata.CandleInterval;
@@ -35,6 +35,7 @@ import com.example.futuresbot.strategy.StrategyContext;
 import com.example.futuresbot.strategy.TradeSignal;
 import com.example.futuresbot.strategy.TradingStrategy;
 import com.example.futuresbot.strategy.elder.ElderTripleScreenStrategy;
+import com.example.futuresbot.utils.NumberUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -96,23 +97,23 @@ public final class BotRuntime {
 
     public void start() {
         log.info("Runtime started. symbols={} adoptionMode={}",
-                config.trading().symbols(), config.trading().adoptionMode());
+                this.config.trading().symbols(), this.config.trading().adoptionMode());
 
-        verifyExchangeSetup();
+        this.verifyExchangeSetup();
 
-        AccountEquitySnapshot startupEquity = exchangeGateway.accountEquity();
-        dailyRiskManager.initialize(startupEquity.marginBalanceUsd(), Instant.now());
+        AccountEquitySnapshot startupEquity = this.exchangeGateway.accountEquity();
+        this.dailyRiskManager.initialize(startupEquity.marginBalanceUsd(), Instant.now());
 
-        ExchangeSnapshot startupSnapshot = exchangeGateway.currentSnapshot();
-        logStartupRecoverySummary(startupSnapshot);
-        syncSnapshot(startupSnapshot, false);
+        ExchangeSnapshot startupSnapshot = this.exchangeGateway.currentSnapshot();
+        this.logStartupRecoverySummary(startupSnapshot);
+        this.syncSnapshot(startupSnapshot);
 
-        exchangeGateway.connectUserStream(this::onUserStreamEvent);
-        bootstrapMarketData();
-        lastMarketDataEventAt.set(Instant.now());
-        marketDataService.connectKlineStreams(config.trading().symbols(), STRATEGY_INTERVALS, this::onCandle);
+        this.exchangeGateway.connectUserStream(this::onUserStreamEvent);
+        this.bootstrapMarketData();
+        this.lastMarketDataEventAt.set(Instant.now());
+        this.marketDataService.connectKlineStreams(this.config.trading().symbols(), STRATEGY_INTERVALS, this::onCandle);
 
-        riskScheduler.scheduleAtFixedRate(this::runRiskMonitor, 15, 15, TimeUnit.SECONDS);
+        this.riskScheduler.scheduleAtFixedRate(this::runRiskMonitor, 15, 15, TimeUnit.SECONDS);
 
         Runtime.getRuntime().addShutdownHook(new Thread(this::stop));
         log.info("Exchange wiring complete. Bot is now reconciling live exchange state.");
@@ -133,25 +134,25 @@ public final class BotRuntime {
     }
 
     private void verifyExchangeSetup() {
-        if (config.exchange().hedgeModeRequired() && !exchangeGateway.isHedgeModeEnabled()) {
+        if (this.config.exchange().hedgeModeRequired() && !this.exchangeGateway.isHedgeModeEnabled()) {
             throw new IllegalStateException(
                     "Bot requires Binance hedge mode, but account is currently in one-way mode");
         }
 
-        int leverage = config.trading().defaultLeverage();
-        if (leverage > 0) {
-            for (String symbol : config.trading().symbols()) {
-                exchangeGateway.setLeverage(symbol, leverage);
+        int leverage = this.config.trading().defaultLeverage();
+        if (NumberUtils.isPositive(leverage)) {
+            for (String symbol : this.config.trading().symbols()) {
+                this.exchangeGateway.setLeverage(symbol, leverage);
             }
         }
     }
 
     private void logStartupRecoverySummary(ExchangeSnapshot snapshot) {
-        long nonFlatPositions = snapshot.positions().stream().filter(position -> !position.isFlat()).count();
-        if (nonFlatPositions > 0 || !snapshot.openOrders().isEmpty() || !snapshot.openAlgoOrders().isEmpty()) {
+        long openPositions = snapshot.positions().stream().filter(PositionSnapshot::isOpen).count();
+        if (NumberUtils.isPositive(openPositions) || !snapshot.openOrders().isEmpty() || !snapshot.openAlgoOrders().isEmpty()) {
             log.warn(
                     "Startup recovery detected positions={} openOrders={} openAlgoOrders={}",
-                    nonFlatPositions,
+                    openPositions,
                     snapshot.openOrders().size(),
                     snapshot.openAlgoOrders().size());
         }
@@ -160,8 +161,8 @@ public final class BotRuntime {
     private void bootstrapMarketData() {
         for (String symbol : config.trading().symbols()) {
             for (CandleInterval interval : STRATEGY_INTERVALS) {
-                List<Candle> candles = marketDataService.loadHistoricalKlines(symbol, interval, 250);
-                marketDataBuffer.seed(symbol, interval, candles);
+                List<Candle> candles = this.marketDataService.loadHistoricalKlines(symbol, interval, 250);
+                this.marketDataBuffer.seed(symbol, interval, candles);
                 log.info("Bootstrapped {} candles for {} {}", candles.size(), symbol, interval.code());
             }
         }
@@ -192,6 +193,15 @@ public final class BotRuntime {
         }
 
         AccountEquitySnapshot equity = exchangeGateway.accountEquity();
+        log.info(
+                "Signal equity snapshot symbol={} type={} marginBalance={} availableBalance={} unrealizedPnl={} riskMode={} effectiveCapitalUsd={}",
+                signal.symbol(),
+                signal.type(),
+                equity.marginBalanceUsd(),
+                equity.availableBalanceUsd(),
+                equity.unrealizedPnlUsd(),
+                config.trading().riskCapitalMode(),
+                config.trading().effectiveCapitalUsd());
         RiskGateDecision riskDecision = dailyRiskManager.evaluateCanTrade(equity.marginBalanceUsd(), Instant.now());
         if (!riskDecision.allowed()) {
             triggerTradingHalt(riskDecision.reason(), false);
@@ -316,9 +326,9 @@ public final class BotRuntime {
                 oppositeKey.symbol(), oppositeKey.side(), snapshot.quantity(), actualClientOrderId);
     }
 
-    private void syncSnapshot(ExchangeSnapshot snapshot, boolean manualInterventionDetected) {
-        for (String symbol : config.trading().symbols()) {
-            reconcileForSymbol(snapshot, symbol, manualInterventionDetected);
+    private void syncSnapshot(ExchangeSnapshot snapshot) {
+        for (String symbol : this.config.trading().symbols()) {
+            this.reconcileForSymbol(snapshot, symbol, false);
         }
     }
 
@@ -331,15 +341,15 @@ public final class BotRuntime {
     }
 
     private void reconcileForSymbol(ExchangeSnapshot snapshot, String symbol, boolean manualInterventionDetected) {
-        reconcileKey(snapshot, new PositionKey(symbol, PositionSide.LONG), manualInterventionDetected);
-        reconcileKey(snapshot, new PositionKey(symbol, PositionSide.SHORT), manualInterventionDetected);
+        this.reconcileKey(snapshot, new PositionKey(symbol, PositionSide.LONG), manualInterventionDetected);
+        this.reconcileKey(snapshot, new PositionKey(symbol, PositionSide.SHORT), manualInterventionDetected);
     }
 
     private void reconcileKey(ExchangeSnapshot snapshot, PositionKey key, boolean manualInterventionDetected) {
-        Optional<ManagedPosition> internalPosition = Optional.ofNullable(managedPositions.get(key));
+        Optional<ManagedPosition> internalPosition = Optional.ofNullable(this.managedPositions.get(key));
         var exchangePosition = snapshot.findPosition(key);
 
-        ReconcileDecision decision = reconciler.reconcile(
+        ReconcileDecision decision = this.reconciler.reconcile(
                 internalPosition,
                 exchangePosition,
                 manualInterventionDetected);
@@ -463,33 +473,33 @@ public final class BotRuntime {
 
     private void onUserStreamEvent(UserStreamEvents.UserStreamEvent event) {
         switch (event) {
-            case UserStreamEvents.OrderTradeUpdateEvent orderEvent -> onOrderTradeUpdate(orderEvent);
-            case UserStreamEvents.AccountPositionUpdateEvent accountEvent -> onAccountPositionUpdate(accountEvent);
-            case UserStreamEvents.AlgoOrderUpdateEvent algoEvent -> onAlgoOrderUpdate(algoEvent);
+            case UserStreamEvents.OrderTradeUpdateEvent orderEvent -> this.onOrderTradeUpdate(orderEvent);
+            case UserStreamEvents.AccountPositionUpdateEvent accountEvent -> this.onAccountPositionUpdate(accountEvent);
+            case UserStreamEvents.AlgoOrderUpdateEvent algoEvent -> this.onAlgoOrderUpdate(algoEvent);
         }
     }
 
     public void onOrderTradeUpdate(UserStreamEvents.OrderTradeUpdateEvent event) {
-        boolean manual = manualDetector.isManual(event, knownBotClientOrderIds);
+        boolean manual = this.manualDetector.isManual(event, this.knownBotClientOrderIds);
         if (manual) {
             log.warn("Manual intervention detected: symbol={} side={} clientOrderId={}",
                     event.symbol(), event.positionSide(), event.clientOrderId());
         }
 
-        if (isActivityWorthyOrderState(event.orderStatus(), event.executionType())) {
-            markTradeActivity(event.symbol(), event.eventTime());
+        if (this.isActivityWorthyOrderState(event.orderStatus(), event.executionType())) {
+            this.markTradeActivity(event.symbol(), event.eventTime());
         }
 
-        refreshSymbol(event.symbol(), manual);
+        this.refreshSymbol(event.symbol(), manual);
     }
 
     public void onAccountPositionUpdate(UserStreamEvents.AccountPositionUpdateEvent event) {
-        markTradeActivity(event.symbol(), event.eventTime());
-        refreshSymbol(event.symbol(), false);
+        this.markTradeActivity(event.symbol(), event.eventTime());
+        this.refreshSymbol(event.symbol(), false);
     }
 
     public void onAlgoOrderUpdate(UserStreamEvents.AlgoOrderUpdateEvent event) {
-        boolean manual = manualDetector.isManualAlgo(event.clientAlgoId(), knownBotClientAlgoIds);
+        boolean manual = this.manualDetector.isManualAlgo(event.clientAlgoId(), this.knownBotClientAlgoIds);
         if (manual) {
             log.warn("Manual algo intervention detected: symbol={} side={} clientAlgoId={} status={}",
                     event.symbol(), event.positionSide(), event.clientAlgoId(), event.algoStatus());
@@ -498,11 +508,11 @@ public final class BotRuntime {
                     event.symbol(), event.positionSide(), event.clientAlgoId(), event.orderType(), event.algoStatus());
         }
 
-        if (isActivityWorthyAlgoState(event.algoStatus())) {
-            markTradeActivity(event.symbol(), event.eventTime());
+        if (this.isActivityWorthyAlgoState(event.algoStatus())) {
+            this.markTradeActivity(event.symbol(), event.eventTime());
         }
 
-        refreshSymbol(event.symbol(), manual);
+        this.refreshSymbol(event.symbol(), manual);
     }
 
     public Optional<ManagedPosition> getManagedPosition(PositionKey key) {
@@ -523,7 +533,7 @@ public final class BotRuntime {
 
     private void markTradeActivity(String symbol, Instant when) {
         if (symbol != null && when != null) {
-            lastTradeActivityBySymbol.put(symbol, when);
+            this.lastTradeActivityBySymbol.put(symbol, when);
         }
     }
 

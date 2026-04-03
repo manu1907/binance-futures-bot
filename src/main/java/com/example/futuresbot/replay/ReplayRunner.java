@@ -22,6 +22,7 @@ import java.math.RoundingMode;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -191,6 +192,13 @@ public final class ReplayRunner {
         Instant from = Instant.parse(replay.from());
         Instant to = Instant.parse(replay.to());
 
+        List<ReplayEvent> events = getReplayEvents(seriesBySymbol, from, to);
+
+        events.sort(Comparator.comparing((ReplayEvent left) -> left.candle().closeTime()).thenComparing(ReplayEvent::symbol));
+        return events;
+    }
+
+    private static List<ReplayEvent> getReplayEvents(Map<String, SymbolReplaySeries> seriesBySymbol, Instant from, Instant to) {
         List<ReplayEvent> events = new ArrayList<>();
         for (Map.Entry<String, SymbolReplaySeries> entry : seriesBySymbol.entrySet()) {
             String symbol = entry.getKey();
@@ -204,14 +212,6 @@ public final class ReplayRunner {
                 events.add(new ReplayEvent(symbol, candle, i));
             }
         }
-
-        events.sort((left, right) -> {
-            int timeCompare = left.candle().closeTime().compareTo(right.candle().closeTime());
-            if (timeCompare != 0) {
-                return timeCompare;
-            }
-            return left.symbol().compareTo(right.symbol());
-        });
         return events;
     }
 
@@ -238,32 +238,21 @@ public final class ReplayRunner {
             stopHit = bar.low().compareTo(position.stopPrice()) <= 0;
             tpHit = bar.high().compareTo(position.takeProfitPrice()) >= 0;
 
-            if (!stopHit && !tpHit) {
-                return Optional.empty();
-            }
-
-            if (stopHit) {
-                exitPrice = position.stopPrice();
-                exitReason = "STOP";
-            } else {
-                exitPrice = position.takeProfitPrice();
-                exitReason = "TAKE_PROFIT";
-            }
         } else {
             stopHit = bar.high().compareTo(position.stopPrice()) >= 0;
             tpHit = bar.low().compareTo(position.takeProfitPrice()) <= 0;
+        }
 
-            if (!stopHit && !tpHit) {
-                return Optional.empty();
-            }
+        if (!stopHit && !tpHit) {
+            return Optional.empty();
+        }
 
-            if (stopHit) {
-                exitPrice = position.stopPrice();
-                exitReason = "STOP";
-            } else {
-                exitPrice = position.takeProfitPrice();
-                exitReason = "TAKE_PROFIT";
-            }
+        if (stopHit) {
+            exitPrice = position.stopPrice();
+            exitReason = "STOP";
+        } else {
+            exitPrice = position.takeProfitPrice();
+            exitReason = "TAKE_PROFIT";
         }
 
         return Optional

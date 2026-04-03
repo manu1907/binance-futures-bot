@@ -16,12 +16,12 @@ public final class InMemoryMarketDataBuffer {
 
     public void seed(String symbol, CandleInterval interval, List<Candle> candles) {
         SymbolTimeframeKey key = new SymbolTimeframeKey(symbol, interval);
-        Deque<Candle> deque = series.computeIfAbsent(key, ignored -> new ArrayDeque<>());
+        Deque<Candle> deque = this.series.computeIfAbsent(key, ignored -> new ArrayDeque<>());
         synchronized (deque) {
             deque.clear();
             for (Candle candle : candles) {
                 deque.addLast(candle);
-                trim(deque);
+                this.trim(deque);
             }
         }
     }
@@ -48,7 +48,7 @@ public final class InMemoryMarketDataBuffer {
     }
 
     private void trim(Deque<Candle> deque) {
-        while (deque.size() > maxBarsPerSeries) {
+        while (deque.size() > this.maxBarsPerSeries) {
             deque.removeFirst();
         }
     }

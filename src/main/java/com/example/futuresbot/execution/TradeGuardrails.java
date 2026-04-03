@@ -31,7 +31,7 @@ public final class TradeGuardrails {
         }
 
         long activeManagedPositions = managedPositions.values().stream()
-                .filter(position -> position.snapshot() != null && !position.snapshot().isFlat())
+                .filter(position -> position.snapshot() != null && position.snapshot().isOpen())
                 .count();
 
         if (activeManagedPositions >= maxOpenPositions && !managedPositions.containsKey(key)) {

@@ -6,6 +6,7 @@ import com.example.futuresbot.domain.PositionSide;
 import com.example.futuresbot.domain.PositionSnapshot;
 import com.example.futuresbot.execution.AccountEquitySnapshot;
 import com.example.futuresbot.strategy.SignalType;
+import com.example.futuresbot.utils.JsonUtils;
 import com.fasterxml.jackson.databind.JsonNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -37,8 +38,8 @@ public final class BinanceRestGateway implements ExchangeGateway {
         List<OpenOrderSnapshot> openOrders = new ArrayList<>();
         List<AlgoOrderSnapshot> openAlgoOrders = new ArrayList<>();
 
-        for (String symbol : config.trading().symbols()) {
-            ExchangeSnapshot perSymbol = currentSnapshot(symbol);
+        for (String symbol : this.config.trading().symbols()) {
+            ExchangeSnapshot perSymbol = this.currentSnapshot(symbol);
             positions.addAll(perSymbol.positions());
             openOrders.addAll(perSymbol.openOrders());
             openAlgoOrders.addAll(perSymbol.openAlgoOrders());
@@ -50,11 +51,11 @@ public final class BinanceRestGateway implements ExchangeGateway {
     @Override
     public ExchangeSnapshot currentSnapshot(String symbol) {
         List<OpenOrderSnapshot> openOrders = parseOpenOrders(
-                httpClient.getSigned("/fapi/v1/openOrders", Map.of("symbol", symbol)));
+                this.httpClient.getSigned("/fapi/v1/openOrders", Map.of("symbol", symbol)));
         List<AlgoOrderSnapshot> openAlgoOrders = parseAlgoOrders(
-                httpClient.getSigned("/fapi/v1/openAlgoOrders", Map.of("symbol", symbol)));
+                this.httpClient.getSigned("/fapi/v1/openAlgoOrders", Map.of("symbol", symbol)));
         List<PositionSnapshot> positions = parsePositions(
-                httpClient.getSigned("/fapi/v3/positionRisk", Map.of("symbol", symbol)),
+                this.httpClient.getSigned("/fapi/v3/positionRisk", Map.of("symbol", symbol)),
                 openOrders,
                 openAlgoOrders);
         return new ExchangeSnapshot(positions, openOrders, openAlgoOrders);
@@ -70,9 +71,9 @@ public final class BinanceRestGateway implements ExchangeGateway {
     public AccountEquitySnapshot accountEquity() {
         JsonNode node = httpClient.getSigned("/fapi/v2/account", Map.of());
         return new AccountEquitySnapshot(
-                node.path("totalMarginBalance").decimalValue(),
-                node.path("availableBalance").decimalValue(),
-                node.path("totalUnrealizedProfit").decimalValue());
+                JsonUtils.decimal(node, "totalMarginBalance"),
+                JsonUtils.decimal(node, "availableBalance"),
+                JsonUtils.decimal(node, "totalUnrealizedProfit"));
     }
 
     @Override
@@ -160,16 +161,16 @@ public final class BinanceRestGateway implements ExchangeGateway {
 
     @Override
     public synchronized void connectUserStream(Consumer<UserStreamEvents.UserStreamEvent> consumer) {
-        if (userStreamService != null) {
+        if (this.userStreamService != null) {
             return;
         }
-        this.userStreamService = new BinanceUserStreamService(config.exchange(), httpClient);
+        this.userStreamService = new BinanceUserStreamService(this.config.exchange(), this.httpClient);
         this.userStreamService.start(consumer);
     }
 
     @Override
     public void setLeverage(String symbol, int leverage) {
-        httpClient.postSigned("/fapi/v1/leverage", Map.of(
+        this.httpClient.postSigned("/fapi/v1/leverage", Map.of(
                 "symbol", symbol,
                 "leverage", String.valueOf(leverage)));
         log.info("Leverage set: symbol={} leverage={}x", symbol, leverage);
@@ -177,9 +178,9 @@ public final class BinanceRestGateway implements ExchangeGateway {
 
     @Override
     public synchronized void close() {
-        if (userStreamService != null) {
-            userStreamService.close();
-            userStreamService = null;
+        if (this.userStreamService != null) {
+            this.userStreamService.close();
+            this.userStreamService = null;
         }
     }
 

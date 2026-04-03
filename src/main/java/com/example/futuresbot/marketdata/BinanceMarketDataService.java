@@ -40,7 +40,7 @@ public final class BinanceMarketDataService implements MarketDataService {
 
     @Override
     public List<Candle> loadHistoricalKlines(String symbol, CandleInterval interval, int limit) {
-        JsonNode json = httpClient.getPublic("/fapi/v1/klines", Map.of(
+        JsonNode json = this.httpClient.getPublic("/fapi/v1/klines", Map.of(
                 "symbol", symbol,
                 "interval", interval.code(),
                 "limit", Integer.toString(limit)));
@@ -51,7 +51,7 @@ public final class BinanceMarketDataService implements MarketDataService {
         }
 
         for (JsonNode row : json) {
-            candles.add(parseRestKline(symbol, interval, row));
+            candles.add(this.parseRestKline(symbol, interval, row));
         }
 
         return candles;
@@ -103,7 +103,7 @@ public final class BinanceMarketDataService implements MarketDataService {
     public synchronized void connectKlineStreams(List<String> symbols, List<CandleInterval> intervals,
             Consumer<Candle> consumer) {
         this.consumer = consumer;
-        String base = config.useTestnet() ? TESTNET_WS_BASE_URL : normalize(config.wsBaseUrl(), MAINNET_WS_BASE_URL);
+        String base = this.config.useTestnet() ? TESTNET_WS_BASE_URL : normalize(this.config.wsBaseUrl(), MAINNET_WS_BASE_URL);
         String normalized = base.endsWith("/") ? base.substring(0, base.length() - 1) : base;
 
         String streamList = symbols.stream()
@@ -114,7 +114,7 @@ public final class BinanceMarketDataService implements MarketDataService {
 
         URI uri = URI.create(normalized + "/stream?streams=" + streamList);
         log.info("Connecting market data stream to {}", uri);
-        this.webSocket = webSocketClient.newWebSocketBuilder()
+        this.webSocket = this.webSocketClient.newWebSocketBuilder()
                 .buildAsync(uri, new KlineStreamListener())
                 .join();
     }
