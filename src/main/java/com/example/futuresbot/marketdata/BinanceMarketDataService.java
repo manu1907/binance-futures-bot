@@ -101,7 +101,7 @@ public final class BinanceMarketDataService implements MarketDataService {
 
     @Override
     public synchronized void connectKlineStreams(List<String> symbols, List<CandleInterval> intervals,
-            Consumer<Candle> consumer) {
+                                                 Consumer<Candle> consumer) {
         this.consumer = consumer;
         String base = this.config.useTestnet() ? TESTNET_WS_BASE_URL : normalize(this.config.wsBaseUrl(), MAINNET_WS_BASE_URL);
         String normalized = base.endsWith("/") ? base.substring(0, base.length() - 1) : base;
@@ -132,29 +132,33 @@ public final class BinanceMarketDataService implements MarketDataService {
     }
 
     private void handleMessage(String text) {
+        JsonNode root;
         try {
-            JsonNode root = JsonMapper.builder().build().readTree(text);
-            JsonNode payload = root.has("data") ? root.path("data") : root;
-            JsonNode kline = payload.path("k");
-            if (kline.isMissingNode()) {
-                return;
-            }
-
-            Candle candle = new Candle(
-                    payload.path("s").asText(),
-                    CandleInterval.fromCode(kline.path("i").asText()),
-                    Instant.ofEpochMilli(kline.path("t").asLong()),
-                    Instant.ofEpochMilli(kline.path("T").asLong()),
-                    new BigDecimal(kline.path("o").asText()),
-                    new BigDecimal(kline.path("h").asText()),
-                    new BigDecimal(kline.path("l").asText()),
-                    new BigDecimal(kline.path("c").asText()),
-                    new BigDecimal(kline.path("v").asText()),
-                    kline.path("x").asBoolean(false));
-            consumer.accept(candle);
+            root = JsonMapper.builder().build().readTree(text);
         } catch (Exception e) {
             log.warn("Failed to parse market data message: {}", text, e);
+            return;
         }
+
+        JsonNode payload = root.has("data") ? root.path("data") : root;
+        JsonNode kline = payload.path("k");
+        if (kline.isMissingNode()) {
+            return;
+        }
+
+        Candle candle = new Candle(
+                payload.path("s").asText(),
+                CandleInterval.fromCode(kline.path("i").asText()),
+                Instant.ofEpochMilli(kline.path("t").asLong()),
+                Instant.ofEpochMilli(kline.path("T").asLong()),
+                new BigDecimal(kline.path("o").asText()),
+                new BigDecimal(kline.path("h").asText()),
+                new BigDecimal(kline.path("l").asText()),
+                new BigDecimal(kline.path("c").asText()),
+                new BigDecimal(kline.path("v").asText()),
+                kline.path("x").asBoolean(false));
+
+        consumer.accept(candle);
     }
 
     private Candle parseRestKline(String symbol, CandleInterval interval, JsonNode row) {

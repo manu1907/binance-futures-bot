@@ -2,12 +2,15 @@ package com.example.futuresbot.execution;
 
 import com.example.futuresbot.exchange.ExchangeGateway;
 import com.example.futuresbot.exchange.SymbolRules;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.UUID;
 
 public final class ExecutionService {
+    private static final Logger log = LoggerFactory.getLogger(ExecutionService.class);
 
     public PlacementResult execute(OrderPlan plan, ExchangeGateway exchangeGateway) {
         SymbolRules rules = exchangeGateway.symbolRules(plan.symbol());
@@ -31,6 +34,15 @@ public final class ExecutionService {
         if (stopTriggerPrice.signum() <= 0 || takeProfitTriggerPrice.signum() <= 0) {
             return PlacementResult.rejected(plan.symbol(), plan.signalType(), "Rounded trigger price is zero");
         }
+
+        log.info(
+                "Entry placement symbol={} type={} rawQty={} normalizedQty={} normalizedStop={} normalizedTp={}",
+                plan.symbol(),
+                plan.signalType(),
+                plan.quantity().toPlainString(),
+                quantity.toPlainString(),
+                stopTriggerPrice.toPlainString(),
+                takeProfitTriggerPrice.toPlainString());
 
         String entryClientOrderId = clientId("ENTRY");
         String stopClientAlgoId = clientId("STOP");

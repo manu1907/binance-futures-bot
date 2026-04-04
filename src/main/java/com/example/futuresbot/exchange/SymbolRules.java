@@ -16,6 +16,7 @@ public record SymbolRules(
         BigDecimal marketStepSize,
         BigDecimal minNotional,
         BigDecimal triggerProtect) {
+
     public BigDecimal normalizePrice(BigDecimal price) {
         return normalizeWithBounds(price, minPrice, maxPrice, tickSize);
     }
@@ -29,20 +30,30 @@ public record SymbolRules(
             return BigDecimal.ZERO;
         }
 
+        BigDecimal effectiveMin = min != null ? min : BigDecimal.ZERO;
         BigDecimal bounded = value;
+
         if (max != null && max.signum() > 0 && bounded.compareTo(max) > 0) {
             bounded = max;
         }
-        if (min != null && bounded.compareTo(min) < 0) {
+        if (bounded.compareTo(effectiveMin) < 0) {
             return BigDecimal.ZERO;
         }
         if (step == null || step.signum() == 0) {
-            return bounded;
+            return bounded.stripTrailingZeros();
         }
 
-        BigDecimal offset = bounded.subtract(min);
+        BigDecimal strippedStep = step.stripTrailingZeros();
+        int effectiveScale = Math.max(strippedStep.scale(), 0);
+
+        BigDecimal offset = bounded.subtract(effectiveMin);
         BigDecimal units = offset.divide(step, 0, RoundingMode.DOWN);
-        BigDecimal normalized = min.add(units.multiply(step));
-        return normalized.setScale(Math.max(step.scale(), 0), RoundingMode.DOWN);
+        BigDecimal normalized = effectiveMin.add(units.multiply(step));
+
+        if (normalized.compareTo(effectiveMin) < 0) {
+            return BigDecimal.ZERO;
+        }
+
+        return normalized.setScale(effectiveScale, RoundingMode.DOWN);
     }
 }
