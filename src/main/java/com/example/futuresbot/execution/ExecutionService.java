@@ -36,11 +36,13 @@ public final class ExecutionService {
         }
 
         log.info(
-                "Entry placement symbol={} type={} rawQty={} normalizedQty={} normalizedStop={} normalizedTp={}",
+                "Entry placement symbol={} type={} rawQty={} normalizedQty={} lotStep={} marketStep={} normalizedStop={} normalizedTp={}",
                 plan.symbol(),
                 plan.signalType(),
                 plan.quantity().toPlainString(),
                 quantity.toPlainString(),
+                rules.lotStepSize().toPlainString(),
+                rules.marketStepSize().toPlainString(),
                 stopTriggerPrice.toPlainString(),
                 takeProfitTriggerPrice.toPlainString());
 

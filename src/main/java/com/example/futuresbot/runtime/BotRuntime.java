@@ -418,7 +418,14 @@ public final class BotRuntime {
             return;
         }
 
-        PlacementResult placement = executionService.execute(plan, exchangeGateway);
+        PlacementResult placement;
+        try {
+            placement = executionService.execute(plan, exchangeGateway);
+        } catch (Exception e) {
+            log.warn("LIVE placement failed symbol={} type={}", plan.symbol(), plan.signalType(), e);
+            return;
+        }
+
         if (!placement.accepted()) {
             log.warn("LIVE placement rejected symbol={} type={} reason={}",
                     plan.symbol(), plan.signalType(), placement.rejectionReason());

@@ -17,6 +17,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 
@@ -96,8 +97,15 @@ public final class BinanceRestGateway implements ExchangeGateway {
         }
 
         SymbolRules loaded = symbolRulesCache.get(symbol);
-        if (loaded == null) {
+        if (Objects.isNull(loaded)) {
             throw new IllegalArgumentException("No exchange rules found for symbol " + symbol);
+        } else {
+            log.info("Loaded symbol rules symbol={} lotStep={} marketStep={} lotMinQty={} marketMinQty={}",
+                    loaded.symbol(),
+                    loaded.lotStepSize(),
+                    loaded.marketStepSize(),
+                    loaded.lotMinQty(),
+                    loaded.marketMinQty());
         }
         return loaded;
     }

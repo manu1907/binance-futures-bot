@@ -22,7 +22,10 @@ public record SymbolRules(
     }
 
     public BigDecimal normalizeMarketQuantity(BigDecimal quantity) {
-        return normalizeWithBounds(quantity, marketMinQty, marketMaxQty, marketStepSize);
+        BigDecimal effectiveMinQty = maxPositive(lotMinQty, marketMinQty);
+        BigDecimal effectiveMaxQty = minPositive(lotMaxQty, marketMaxQty);
+        BigDecimal effectiveStepSize = maxPositive(lotStepSize, marketStepSize);
+        return normalizeWithBounds(quantity, effectiveMinQty, effectiveMaxQty, effectiveStepSize);
     }
 
     private BigDecimal normalizeWithBounds(BigDecimal value, BigDecimal min, BigDecimal max, BigDecimal step) {
@@ -30,7 +33,7 @@ public record SymbolRules(
             return BigDecimal.ZERO;
         }
 
-        BigDecimal effectiveMin = min != null ? min : BigDecimal.ZERO;
+        BigDecimal effectiveMin = positiveOrZero(min);
         BigDecimal bounded = value;
 
         if (max != null && max.signum() > 0 && bounded.compareTo(max) > 0) {
@@ -39,7 +42,8 @@ public record SymbolRules(
         if (bounded.compareTo(effectiveMin) < 0) {
             return BigDecimal.ZERO;
         }
-        if (step == null || step.signum() == 0) {
+
+        if (step == null || step.signum() <= 0) {
             return bounded.stripTrailingZeros();
         }
 
@@ -55,5 +59,32 @@ public record SymbolRules(
         }
 
         return normalized.setScale(effectiveScale, RoundingMode.DOWN);
+    }
+
+    private BigDecimal maxPositive(BigDecimal a, BigDecimal b) {
+        BigDecimal pa = positiveOrZero(a);
+        BigDecimal pb = positiveOrZero(b);
+        return pa.max(pb);
+    }
+
+    private BigDecimal minPositive(BigDecimal a, BigDecimal b) {
+        BigDecimal pa = positiveOrNull(a);
+        BigDecimal pb = positiveOrNull(b);
+
+        if (pa == null) {
+            return pb;
+        }
+        if (pb == null) {
+            return pa;
+        }
+        return pa.min(pb);
+    }
+
+    private BigDecimal positiveOrZero(BigDecimal value) {
+        return value != null && value.signum() > 0 ? value : BigDecimal.ZERO;
+    }
+
+    private BigDecimal positiveOrNull(BigDecimal value) {
+        return value != null && value.signum() > 0 ? value : null;
     }
 }
