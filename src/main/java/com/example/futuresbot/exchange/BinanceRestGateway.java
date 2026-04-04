@@ -241,7 +241,7 @@ public final class BinanceRestGateway implements ExchangeGateway {
         BigDecimal marketMaxQty = new BigDecimal("999999999");
         BigDecimal marketStep = BigDecimal.ONE;
         BigDecimal minNotional = BigDecimal.ZERO;
-        BigDecimal triggerProtect = node.path("triggerProtect").decimalValue();
+        BigDecimal triggerProtect = JsonUtils.decimal(node, "triggerProtect");
 
         JsonNode filters = node.path("filters");
         if (filters.isArray()) {
@@ -249,21 +249,21 @@ public final class BinanceRestGateway implements ExchangeGateway {
                 String filterType = filter.path("filterType").asText();
                 switch (filterType) {
                     case "PRICE_FILTER" -> {
-                        minPrice = filter.path("minPrice").decimalValue();
-                        maxPrice = filter.path("maxPrice").decimalValue();
-                        tickSize = filter.path("tickSize").decimalValue();
+                        minPrice = JsonUtils.decimal(filter, "minPrice");
+                        maxPrice = JsonUtils.decimal(filter, "maxPrice");
+                        tickSize = JsonUtils.decimal(filter, "tickSize");
                     }
                     case "LOT_SIZE" -> {
-                        lotMinQty = filter.path("minQty").decimalValue();
-                        lotMaxQty = filter.path("maxQty").decimalValue();
-                        lotStep = filter.path("stepSize").decimalValue();
+                        lotMinQty = JsonUtils.decimal(filter, "minQty");
+                        lotMaxQty = JsonUtils.decimal(filter, "maxQty");
+                        lotStep = JsonUtils.decimal(filter, "stepSize");
                     }
                     case "MARKET_LOT_SIZE" -> {
-                        marketMinQty = filter.path("minQty").decimalValue();
-                        marketMaxQty = filter.path("maxQty").decimalValue();
-                        marketStep = filter.path("stepSize").decimalValue();
+                        marketMinQty = JsonUtils.decimal(filter, "minQty");
+                        marketMaxQty = JsonUtils.decimal(filter, "maxQty");
+                        marketStep = JsonUtils.decimal(filter, "stepSize");
                     }
-                    case "MIN_NOTIONAL" -> minNotional = filter.path("notional").decimalValue();
+                    case "MIN_NOTIONAL" -> minNotional = JsonUtils.decimal(filter, "notional");
                     default -> {
                         // ignore
                     }
