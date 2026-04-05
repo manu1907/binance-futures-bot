@@ -73,6 +73,6 @@ Copy the example config:
 
 ```bash
 cp src/main/resources/application-example.yml src/main/resources/application.yml
-mvn compile
-mvn test
-mvn exec:java
+./mvnw compile
+./mvnw test
+./mvnw exec:java

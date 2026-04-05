@@ -37,7 +37,6 @@ import java.util.function.Consumer;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
 
 class BotRuntimeScenario1LongContinuationTest {
 
@@ -398,7 +397,7 @@ class BotRuntimeScenario1LongContinuationTest {
                         symbols,
                         dryRun,
                         AdoptionMode.ADOPT_AND_CONTINUE,
-                        0,
+                        2,
                         1.0,
                         maxDailyDrawdownPct,
                         maxOpenPositions,
@@ -579,6 +578,7 @@ class BotRuntimeScenario1LongContinuationTest {
     private static final class FakeExchangeGateway implements ExchangeGateway {
         private final Map<String, ExchangeSnapshot> symbolSnapshots = new HashMap<>();
         private final ArrayDeque<AccountEquitySnapshot> queuedEquities = new ArrayDeque<>();
+        private final Map<String, Integer> leverageBySymbol = new HashMap<>();
         private AccountEquitySnapshot lastEquity = equity(5000);
 
         private int connectUserStreamCalls;
@@ -590,6 +590,7 @@ class BotRuntimeScenario1LongContinuationTest {
         private int cancelAllOpenAlgoOrdersCalls;
         private int closePositionMarketCalls;
         private int cancelAlgoOrderCalls;
+        private int setLeverageCalls = 0;
 
         private String lastEntrySymbol;
         private SignalType lastEntrySignalType;
@@ -728,7 +729,8 @@ class BotRuntimeScenario1LongContinuationTest {
 
         @Override
         public void setLeverage(String symbol, int leverage) {
-            fail("setLeverage should not be called when defaultLeverage=0");
+            setLeverageCalls++;
+            leverageBySymbol.put(symbol, leverage);
         }
     }
 

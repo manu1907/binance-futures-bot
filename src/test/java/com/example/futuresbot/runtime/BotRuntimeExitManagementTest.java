@@ -282,7 +282,7 @@ class BotRuntimeExitManagementTest {
                         List.of(BTC),
                         dryRun,
                         AdoptionMode.ADOPT_AND_CONTINUE,
-                        0,
+                        2,
                         1.0,
                         10.0,
                         1,
@@ -512,11 +512,13 @@ class BotRuntimeExitManagementTest {
     private static final class FakeExchangeGateway implements ExchangeGateway {
         private final Map<String, ExchangeSnapshot> symbolSnapshots = new HashMap<>();
         private final ArrayDeque<AccountEquitySnapshot> queuedEquities = new ArrayDeque<>();
+        private final Map<String, Integer> leverageBySymbol = new HashMap<>();
         private AccountEquitySnapshot lastEquity = equity(5000);
 
         private int placeEntryMarketOrderCalls;
         private int placeProtectiveAlgoOrderCalls;
         private int cancelAlgoOrderCalls;
+        private int setLeverageCalls = 0;
 
         private final List<String> canceledAlgoIds = new ArrayList<>();
 
@@ -641,7 +643,8 @@ class BotRuntimeExitManagementTest {
 
         @Override
         public void setLeverage(String symbol, int leverage) {
-            fail("setLeverage should not be called when defaultLeverage=0");
+            setLeverageCalls++;
+            leverageBySymbol.put(symbol, leverage);
         }
     }
 

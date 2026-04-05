@@ -333,15 +333,19 @@ public final class BotRuntime {
         }
 
         AccountEquitySnapshot equity = exchangeGateway.accountEquity();
+        BigDecimal sizingEquityUsd = equity.sizingEquity(
+                config.trading().riskCapitalMode(),
+                BigDecimal.valueOf(config.trading().effectiveCapitalUsd()));
         log.info(
-                "Signal equity snapshot symbol={} type={} marginBalance={} availableBalance={} unrealizedPnl={} riskMode={} effectiveCapitalUsd={}",
+                "Signal equity snapshot symbol={} type={} marginBalance={} availableBalance={} unrealizedPnl={} riskMode={} configuredCapitalUsd={} sizingEquityUsd={}",
                 signal.symbol(),
                 signal.type(),
                 equity.marginBalanceUsd(),
                 equity.availableBalanceUsd(),
                 equity.unrealizedPnlUsd(),
                 config.trading().riskCapitalMode(),
-                config.trading().effectiveCapitalUsd());
+                config.trading().effectiveCapitalUsd(),
+                sizingEquityUsd);
         RiskGateDecision riskDecision = dailyRiskManager.evaluateCanTrade(equity.marginBalanceUsd(), Instant.now());
         if (!riskDecision.allowed()) {
             triggerTradingHalt(riskDecision.reason(), false);

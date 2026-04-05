@@ -13,9 +13,13 @@ import java.math.RoundingMode;
 import java.util.List;
 
 public final class ExecutionPlanner {
+
     private static final int ATR_PERIOD = 14;
+    private static final int SCALE = 8;
     private static final BigDecimal ONE = BigDecimal.ONE;
     private static final BigDecimal BPS_DIVISOR = BigDecimal.valueOf(10_000);
+    private static final BigDecimal HUNDRED = BigDecimal.valueOf(100);
+    private static final BigDecimal AVAILABLE_MARGIN_BUFFER = BigDecimal.valueOf(0.95);
 
     public OrderPlan plan(
             TradeSignal signal,
@@ -37,17 +41,18 @@ public final class ExecutionPlanner {
         }
 
         BigDecimal atrUsd = BigDecimal.valueOf(IndicatorMath.atr(bars, ATR_PERIOD))
-                .setScale(8, RoundingMode.HALF_UP);
-
+                .setScale(SCALE, RoundingMode.HALF_UP);
         if (atrUsd.signum() <= 0) {
             return OrderPlan.rejected(signal.symbol(), signal.type(), "ATR is zero");
         }
 
-        BigDecimal entryPrice = signal.referencePrice().setScale(8, RoundingMode.HALF_UP);
+        BigDecimal entryPrice = signal.referencePrice().setScale(SCALE, RoundingMode.HALF_UP);
+        if (entryPrice.signum() <= 0) {
+            return OrderPlan.rejected(signal.symbol(), signal.type(), "Entry price is zero");
+        }
 
         BigDecimal stopDistance = atrUsd.multiply(BigDecimal.valueOf(tradingConfig.stopAtrMultiple()))
-                .setScale(8, RoundingMode.HALF_UP);
-
+                .setScale(SCALE, RoundingMode.HALF_UP);
         if (stopDistance.signum() <= 0) {
             return OrderPlan.rejected(signal.symbol(), signal.type(), "Stop distance is zero");
         }
@@ -58,19 +63,20 @@ public final class ExecutionPlanner {
         } else {
             stopPrice = entryPrice.add(stopDistance);
         }
-        stopPrice = stopPrice.setScale(8, RoundingMode.HALF_UP);
 
+        stopPrice = stopPrice.setScale(SCALE, RoundingMode.HALF_UP);
         if (stopPrice.signum() <= 0) {
             return OrderPlan.rejected(signal.symbol(), signal.type(), "Invalid stop price");
         }
 
         BigDecimal feeRate = BigDecimal.valueOf(tradingConfig.takerFeeBps())
-                .divide(BPS_DIVISOR, 8, RoundingMode.HALF_UP);
+                .divide(BPS_DIVISOR, SCALE, RoundingMode.HALF_UP);
 
         BigDecimal stopFeePerUnit = roundTripFeePerUnit(entryPrice, stopPrice, feeRate);
+
         BigDecimal effectiveRiskPerUnit = entryPrice.subtract(stopPrice).abs()
                 .add(stopFeePerUnit)
-                .setScale(8, RoundingMode.HALF_UP);
+                .setScale(SCALE, RoundingMode.HALF_UP);
 
         if (effectiveRiskPerUnit.signum() <= 0) {
             return OrderPlan.rejected(signal.symbol(), signal.type(), "Effective risk per unit is zero");
@@ -78,20 +84,47 @@ public final class ExecutionPlanner {
 
         BigDecimal riskAmountUsd = sizingEquityUsd
                 .multiply(BigDecimal.valueOf(tradingConfig.maxRiskPerTradePct()))
-                .divide(BigDecimal.valueOf(100), 8, RoundingMode.HALF_UP);
+                .divide(HUNDRED, SCALE, RoundingMode.HALF_UP);
 
         if (riskAmountUsd.signum() <= 0) {
             return OrderPlan.rejected(signal.symbol(), signal.type(), "Risk amount is zero");
         }
 
-        BigDecimal quantity = riskAmountUsd.divide(effectiveRiskPerUnit, 8, RoundingMode.DOWN);
+        BigDecimal riskSizedQuantity = riskAmountUsd.divide(effectiveRiskPerUnit, SCALE, RoundingMode.DOWN);
+        if (riskSizedQuantity.signum() <= 0) {
+            return OrderPlan.rejected(signal.symbol(), signal.type(), "Calculated quantity is zero");
+        }
+
+        BigDecimal leverage = BigDecimal.valueOf(tradingConfig.defaultLeverage());
+        if (leverage.signum() <= 0) {
+            return OrderPlan.rejected(signal.symbol(), signal.type(), "Configured leverage is zero");
+        }
+
+        BigDecimal availableBalanceUsd = positive(equity.availableBalanceUsd());
+        BigDecimal maxAffordableNotionalUsd = availableBalanceUsd
+                .multiply(leverage)
+                .multiply(AVAILABLE_MARGIN_BUFFER)
+                .setScale(SCALE, RoundingMode.DOWN);
+
+        if (maxAffordableNotionalUsd.signum() <= 0) {
+            return OrderPlan.rejected(signal.symbol(), signal.type(), "Available margin is zero");
+        }
+
+        BigDecimal marginAffordableQuantity = maxAffordableNotionalUsd
+                .divide(entryPrice, SCALE, RoundingMode.DOWN);
+
+        if (marginAffordableQuantity.signum() <= 0) {
+            return OrderPlan.rejected(signal.symbol(), signal.type(), "Margin-affordable quantity is zero");
+        }
+
+        BigDecimal quantity = riskSizedQuantity.min(marginAffordableQuantity);
         if (quantity.signum() <= 0) {
             return OrderPlan.rejected(signal.symbol(), signal.type(), "Calculated quantity is zero");
         }
 
         BigDecimal desiredNetRewardPerUnit = effectiveRiskPerUnit
                 .multiply(BigDecimal.valueOf(tradingConfig.takeProfitRiskReward()))
-                .setScale(8, RoundingMode.HALF_UP);
+                .setScale(SCALE, RoundingMode.HALF_UP);
 
         BigDecimal takeProfitPrice = solveFeeAwareTakeProfitPrice(
                 signal.type(),
@@ -103,7 +136,7 @@ public final class ExecutionPlanner {
             return OrderPlan.rejected(signal.symbol(), signal.type(), "Invalid take-profit price");
         }
 
-        BigDecimal notionalUsd = quantity.multiply(entryPrice).setScale(8, RoundingMode.HALF_UP);
+        BigDecimal notionalUsd = quantity.multiply(entryPrice).setScale(SCALE, RoundingMode.HALF_UP);
         if (notionalUsd.compareTo(BigDecimal.valueOf(tradingConfig.minimumTradeNotionalUsd())) < 0) {
             return OrderPlan.rejected(
                     signal.symbol(),
@@ -116,12 +149,16 @@ public final class ExecutionPlanner {
                 signal.type(),
                 entryPrice,
                 stopPrice,
-                takeProfitPrice.setScale(8, RoundingMode.HALF_UP),
+                takeProfitPrice.setScale(SCALE, RoundingMode.HALF_UP),
                 quantity,
                 notionalUsd,
-                sizingEquityUsd.setScale(8, RoundingMode.HALF_UP),
+                sizingEquityUsd.setScale(SCALE, RoundingMode.HALF_UP),
                 riskAmountUsd,
                 atrUsd);
+    }
+
+    private BigDecimal positive(BigDecimal value) {
+        return value == null ? BigDecimal.ZERO : value.max(BigDecimal.ZERO);
     }
 
     private BigDecimal roundTripFeePerUnit(
@@ -131,7 +168,7 @@ public final class ExecutionPlanner {
 
         return entryPrice.multiply(feeRate)
                 .add(exitPrice.multiply(feeRate))
-                .setScale(8, RoundingMode.HALF_UP);
+                .setScale(SCALE, RoundingMode.HALF_UP);
     }
 
     private BigDecimal solveFeeAwareTakeProfitPrice(
@@ -143,11 +180,11 @@ public final class ExecutionPlanner {
         if (signalType == SignalType.LONG_ENTRY) {
             BigDecimal numerator = entryPrice.multiply(ONE.add(feeRate)).add(desiredNetRewardPerUnit);
             BigDecimal denominator = ONE.subtract(feeRate);
-            return numerator.divide(denominator, 8, RoundingMode.HALF_UP);
+            return numerator.divide(denominator, SCALE, RoundingMode.HALF_UP);
         }
 
         BigDecimal numerator = entryPrice.multiply(ONE.subtract(feeRate)).subtract(desiredNetRewardPerUnit);
         BigDecimal denominator = ONE.add(feeRate);
-        return numerator.divide(denominator, 8, RoundingMode.HALF_UP);
+        return numerator.divide(denominator, SCALE, RoundingMode.HALF_UP);
     }
 }
