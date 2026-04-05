@@ -407,6 +407,7 @@ class BotRuntimeScenario1LongContinuationTest {
                         5.0,
                         1.5,
                         2.0,
+                        4.0,
                         entryCooldownSeconds,
                         oppositeSignalPolicy,
                         3,

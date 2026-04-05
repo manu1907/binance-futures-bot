@@ -15,7 +15,8 @@ trading:
   maxDailyDrawdownPct: 2.0
   maxOpenPositions: 1
   effectiveCapitalUsd: 200.0
-  riskCapitalMode: "CAPPED_EQUITY"
+  takerFeeBps: 4.0
+  riskCapitalMode: "LIVE_EQUITY"
   minimumTradeNotionalUsd: 5.0
   stopAtrMultiple: 1.5
   takeProfitRiskReward: 2.0

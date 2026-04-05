@@ -4,7 +4,6 @@ import com.example.futuresbot.config.AppConfig;
 import com.example.futuresbot.execution.AccountEquitySnapshot;
 import com.example.futuresbot.execution.ExecutionPlanner;
 import com.example.futuresbot.execution.OrderPlan;
-import com.example.futuresbot.execution.RiskSizer;
 import com.example.futuresbot.marketdata.BinanceMarketDataService;
 import com.example.futuresbot.marketdata.Candle;
 import com.example.futuresbot.marketdata.CandleInterval;
@@ -37,7 +36,7 @@ public final class ReplayRunner {
     private final AppConfig config;
     private final MarketDataService marketDataService;
     private final TradingStrategy strategy = new ElderTripleScreenStrategy();
-    private final ExecutionPlanner executionPlanner = new ExecutionPlanner(new RiskSizer());
+    private final ExecutionPlanner executionPlanner = new ExecutionPlanner();
 
     public ReplayRunner(AppConfig config) {
         this(config, new BinanceMarketDataService(config.exchange()));

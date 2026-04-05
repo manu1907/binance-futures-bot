@@ -30,6 +30,7 @@ public record AppConfig(ExchangeConfig exchange, TradingConfig trading, ReplayCo
             double minimumTradeNotionalUsd,
             double stopAtrMultiple,
             double takeProfitRiskReward,
+            double takerFeeBps,
             int entryCooldownSeconds,
             OppositeSignalPolicy oppositeSignalPolicy,
             int maxConsecutiveLosses,

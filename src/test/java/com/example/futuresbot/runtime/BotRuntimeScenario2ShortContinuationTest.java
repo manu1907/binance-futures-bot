@@ -404,6 +404,7 @@ class BotRuntimeScenario2ShortContinuationTest {
                         5.0,
                         1.5,
                         2.0,
+                        4.0,
                         entryCooldownSeconds,
                         oppositeSignalPolicy,
                         3,

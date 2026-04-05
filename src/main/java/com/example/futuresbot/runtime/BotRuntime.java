@@ -20,7 +20,6 @@ import com.example.futuresbot.execution.PlacementResult;
 import com.example.futuresbot.execution.PositionExitManager;
 import com.example.futuresbot.execution.PositionLifecycleManager;
 import com.example.futuresbot.execution.PositionManagementDecision;
-import com.example.futuresbot.execution.RiskSizer;
 import com.example.futuresbot.execution.TradeGuardrails;
 import com.example.futuresbot.marketdata.BinanceMarketDataService;
 import com.example.futuresbot.marketdata.Candle;
@@ -95,7 +94,7 @@ public final class BotRuntime {
                 new ManualInterventionDetector(),
                 new InMemoryMarketDataBuffer(500),
                 new ElderTripleScreenStrategy(),
-                new ExecutionPlanner(new RiskSizer()),
+                new ExecutionPlanner(),
                 new ExecutionService(),
                 new TradeGuardrails(),
                 new PositionLifecycleManager(),
@@ -114,7 +113,7 @@ public final class BotRuntime {
                 new ManualInterventionDetector(),
                 new InMemoryMarketDataBuffer(500),
                 new ElderTripleScreenStrategy(),
-                new ExecutionPlanner(new RiskSizer()),
+                new ExecutionPlanner(),
                 new ExecutionService(),
                 new TradeGuardrails(),
                 new PositionLifecycleManager(),

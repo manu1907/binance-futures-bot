@@ -218,6 +218,7 @@ class BotRuntimeProtectionRepairTest {
                         5.0,
                         1.5,
                         2.0,
+                        4.0,
                         0,
                         OppositeSignalPolicy.IGNORE,
                         3,
