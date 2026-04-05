@@ -223,7 +223,10 @@ class BotRuntimeScenario2ShortContinuationTest {
         exchangeGateway.setSymbolSnapshot(BTC, new ExchangeSnapshot(
                 List.of(position(BTC, PositionSide.LONG, 0.40, 188.0, true, true)),
                 List.of(new OpenOrderSnapshot(BTC, PositionSide.LONG, "ORDER_1", "SELL", "LIMIT", true)),
-                List.of(new AlgoOrderSnapshot(BTC, PositionSide.LONG, "ALGO_1", "STOP_MARKET", "STOP_MARKET"))
+                List.of(
+                        new AlgoOrderSnapshot(BTC, PositionSide.LONG, "ALGO_STOP_1", "STOP_MARKET", "STOP_MARKET"),
+                        new AlgoOrderSnapshot(BTC, PositionSide.LONG, "ALGO_TP_1", "TAKE_PROFIT_MARKET", "TAKE_PROFIT_MARKET")
+                )
         ));
         marketDataService.seedBearishScenario(BTC);
 

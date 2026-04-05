@@ -225,7 +225,10 @@ class BotRuntimeScenario1LongContinuationTest {
         exchangeGateway.setSymbolSnapshot(BTC, new ExchangeSnapshot(
                 List.of(position(BTC, PositionSide.SHORT, 0.40, 112.0, true, true)),
                 List.of(new OpenOrderSnapshot(BTC, PositionSide.SHORT, "ORDER_1", "BUY", "LIMIT", true)),
-                List.of(new AlgoOrderSnapshot(BTC, PositionSide.SHORT, "ALGO_1", "STOP_MARKET", "STOP_MARKET"))
+                List.of(
+                        new AlgoOrderSnapshot(BTC, PositionSide.SHORT, "ALGO_STOP_1", "STOP_MARKET", "STOP_MARKET"),
+                        new AlgoOrderSnapshot(BTC, PositionSide.SHORT, "ALGO_TP_1", "TAKE_PROFIT_MARKET", "TAKE_PROFIT_MARKET")
+                )
         ));
         marketDataService.seedBullishScenario(BTC);
 

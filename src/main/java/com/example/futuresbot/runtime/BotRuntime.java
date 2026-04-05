@@ -5,6 +5,7 @@ import com.example.futuresbot.domain.ManagedPosition;
 import com.example.futuresbot.domain.PositionKey;
 import com.example.futuresbot.domain.PositionSide;
 import com.example.futuresbot.domain.PositionSnapshot;
+import com.example.futuresbot.exchange.BinanceApiException;
 import com.example.futuresbot.exchange.BinanceRestGateway;
 import com.example.futuresbot.exchange.ExchangeGateway;
 import com.example.futuresbot.exchange.ExchangeSnapshot;
@@ -59,6 +60,8 @@ public final class BotRuntime {
             CandleInterval.HOUR_4,
             CandleInterval.HOUR_1,
             CandleInterval.MINUTES_15);
+    private static final int UNKNOWN_PLACEMENT_RECONCILE_ATTEMPTS = 3;
+    private static final long UNKNOWN_PLACEMENT_RECONCILE_SLEEP_MS = 500L;
 
     private final AppConfig config;
     private final ExchangeGateway exchangeGateway;
@@ -162,15 +165,15 @@ public final class BotRuntime {
         ExchangeSnapshot startupSnapshot = this.exchangeGateway.currentSnapshot();
         this.logStartupRecoverySummary(startupSnapshot);
         this.syncSnapshot(startupSnapshot);
+        this.auditStartupProtection();
 
         this.exchangeGateway.connectUserStream(this::onUserStreamEvent);
         this.bootstrapMarketData();
         this.lastMarketDataEventAt.set(Instant.now());
         this.marketDataService.connectKlineStreams(this.config.trading().symbols(), STRATEGY_INTERVALS, this::onCandle);
-
         this.riskScheduler.scheduleAtFixedRate(this::runRiskMonitor, 15, 15, TimeUnit.SECONDS);
-
         Runtime.getRuntime().addShutdownHook(new Thread(this::stop));
+
         log.info("Exchange wiring complete. Bot is now reconciling live exchange state.");
     }
 
@@ -210,6 +213,55 @@ public final class BotRuntime {
                     openPositions,
                     snapshot.openOrders().size(),
                     snapshot.openAlgoOrders().size());
+        }
+    }
+
+    private void auditStartupProtection() {
+        for (String symbol : this.config.trading().symbols()) {
+            ExchangeSnapshot snapshot = this.exchangeGateway.currentSnapshot(symbol);
+
+            this.auditStartupProtection(snapshot, new PositionKey(symbol, PositionSide.LONG));
+            this.auditStartupProtection(snapshot, new PositionKey(symbol, PositionSide.SHORT));
+            this.logDanglingStartupAlgoOrders(snapshot, symbol);
+        }
+    }
+
+    private void auditStartupProtection(ExchangeSnapshot snapshot, PositionKey key) {
+        Optional<PositionSnapshot> exchangePosition = snapshot.findPosition(key);
+        if (exchangePosition.isEmpty()) {
+            return;
+        }
+
+        boolean hasStop = snapshot.hasProtectiveStop(key);
+        boolean hasTakeProfit = snapshot.hasTakeProfit(key);
+
+        if (hasStop && hasTakeProfit) {
+            log.info("Startup protection audit ok symbol={} side={} hasStop={} hasTakeProfit={}",
+                    key.symbol(), key.side(), hasStop, hasTakeProfit);
+            return;
+        }
+
+        String reason = "Startup protection audit failed for "
+                + key
+                + ": hasStop=" + hasStop
+                + " hasTakeProfit=" + hasTakeProfit;
+
+        log.error(reason);
+        this.triggerTradingHalt(reason, false);
+    }
+
+    private void logDanglingStartupAlgoOrders(ExchangeSnapshot snapshot, String symbol) {
+        long openPositions = snapshot.positions().stream()
+                .filter(position -> position.symbol().equals(symbol) && position.isOpen())
+                .count();
+
+        long openAlgoOrders = snapshot.openAlgoOrders().stream()
+                .filter(order -> order.symbol().equals(symbol))
+                .count();
+
+        if (openPositions == 0 && openAlgoOrders > 0) {
+            log.warn("Startup found dangling algo orders symbol={} openAlgoOrders={} without open position",
+                    symbol, openAlgoOrders);
         }
     }
 
@@ -422,16 +474,15 @@ public final class BotRuntime {
         }
 
         PlacementResult placement;
+
         try {
             placement = executionService.execute(plan, exchangeGateway);
         } catch (Exception e) {
-            log.warn("LIVE placement failed symbol={} type={}", plan.symbol(), plan.signalType(), e);
-            return;
-        }
+            if (this.isUnknownPlacementException(e) && this.recoverUnknownPlacement(desiredKey, plan)) {
+                return;
+            }
 
-        if (!placement.accepted()) {
-            log.warn("LIVE placement rejected symbol={} type={} reason={}",
-                    plan.symbol(), plan.signalType(), placement.rejectionReason());
+            log.warn("LIVE placement failed symbol={} type={}", plan.symbol(), plan.signalType(), e);
             return;
         }
 
@@ -457,6 +508,88 @@ public final class BotRuntime {
                 placement.entryClientOrderId(),
                 placement.stopClientAlgoId(),
                 placement.takeProfitClientAlgoId());
+    }
+
+    private boolean isUnknownPlacementException(Exception e) {
+        if (!(e instanceof BinanceApiException apiException)) {
+            return false;
+        }
+
+        String responseBody = apiException.responseBody();
+        if (responseBody == null || responseBody.isBlank()) {
+            return false;
+        }
+
+        return apiException.statusCode() == 408
+                || responseBody.contains("\"code\":-1007")
+                || responseBody.contains("execution status unknown")
+                || responseBody.contains("Send status unknown");
+    }
+
+    boolean recoverUnknownPlacement(PositionKey key, OrderPlan plan) {
+        log.warn(
+                "LIVE placement status unknown. Attempting reconciliation symbol={} side={} signalType={}",
+                key.symbol(),
+                key.side(),
+                plan.signalType());
+
+        for (int attempt = 1; attempt <= UNKNOWN_PLACEMENT_RECONCILE_ATTEMPTS; attempt++) {
+            ExchangeSnapshot snapshot = this.exchangeGateway.currentSnapshot(key.symbol());
+
+            if (snapshot.findPosition(key).isPresent()) {
+                this.latestAcceptedPlanByKey.put(key, plan);
+                this.reconcileForSymbol(snapshot, key.symbol(), false);
+                this.markTradeActivity(key.symbol(), Instant.now());
+
+                log.warn(
+                        "Recovered unknown placement as open position symbol={} side={} attempt={}",
+                        key.symbol(),
+                        key.side(),
+                        attempt);
+
+                return true;
+            }
+
+            boolean hasOpenRegularOrder = snapshot.hasAnyOpenRegularOrder(key);
+            boolean hasOpenAlgoOrder = snapshot.hasAnyOpenAlgoOrder(key);
+
+            if (hasOpenRegularOrder || hasOpenAlgoOrder) {
+                this.latestAcceptedPlanByKey.put(key, plan);
+
+                log.warn(
+                        "Unknown placement still pending on exchange symbol={} side={} attempt={} openRegularOrder={} openAlgoOrder={}",
+                        key.symbol(),
+                        key.side(),
+                        attempt,
+                        hasOpenRegularOrder,
+                        hasOpenAlgoOrder);
+
+                return true;
+            }
+
+            if (attempt < UNKNOWN_PLACEMENT_RECONCILE_ATTEMPTS) {
+                this.pauseUnknownPlacementReconcile();
+            }
+        }
+
+        this.latestAcceptedPlanByKey.remove(key);
+        this.activeProtectionByKey.remove(key);
+
+        log.error(
+                "Unable to confirm unknown placement symbol={} side={} after {} attempts. Treating as failed.",
+                key.symbol(),
+                key.side(),
+                UNKNOWN_PLACEMENT_RECONCILE_ATTEMPTS);
+
+        return false;
+    }
+
+    private void pauseUnknownPlacementReconcile() {
+        try {
+            Thread.sleep(UNKNOWN_PLACEMENT_RECONCILE_SLEEP_MS);
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+        }
     }
 
     private void flattenOppositePosition(TradeSignal signal, ExchangeSnapshot symbolSnapshot) {
@@ -695,6 +828,10 @@ public final class BotRuntime {
 
     public Optional<ManagedPosition> getManagedPosition(PositionKey key) {
         return Optional.ofNullable(managedPositions.get(key));
+    }
+
+    public Optional<String> getTradingHaltReason() {
+        return Optional.ofNullable(this.tradingHaltReason);
     }
 
     public void rememberBotClientOrderId(String clientOrderId) {
