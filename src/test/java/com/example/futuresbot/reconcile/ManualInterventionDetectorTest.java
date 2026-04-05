@@ -1,6 +1,7 @@
 package com.example.futuresbot.reconcile;
 
 import com.example.futuresbot.domain.PositionSide;
+import com.example.futuresbot.exchange.UserStreamEvents;
 import com.example.futuresbot.exchange.UserStreamEvents.OrderTradeUpdateEvent;
 import org.junit.jupiter.api.Test;
 
@@ -38,5 +39,28 @@ class ManualInterventionDetectorTest {
                 Instant.now());
 
         assertFalse(detector.isManual(event, Set.of("bot-abc")));
+    }
+
+    @Test
+    void botPrefixedOrderIdIsNotManualEvenIfNotYetRecorded() {
+        ManualInterventionDetector detector = new ManualInterventionDetector();
+
+        UserStreamEvents.OrderTradeUpdateEvent event =
+                new UserStreamEvents.OrderTradeUpdateEvent(
+                        "BTCUSDT",
+                        PositionSide.LONG,
+                        "BOT_ENTRY_abc123",
+                        "NEW",
+                        "NEW",
+                        Instant.now());
+
+        assertFalse(detector.isManual(event, Set.of()));
+    }
+
+    @Test
+    void botPrefixedAlgoIdIsNotManualEvenIfNotYetRecorded() {
+        ManualInterventionDetector detector = new ManualInterventionDetector();
+
+        assertFalse(detector.isManualAlgo("BOT_STOP_abc123", Set.of()));
     }
 }

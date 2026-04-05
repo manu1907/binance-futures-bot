@@ -1,21 +1,28 @@
 package com.example.futuresbot.reconcile;
 
-import com.example.futuresbot.exchange.UserStreamEvents.OrderTradeUpdateEvent;
+import com.example.futuresbot.exchange.UserStreamEvents;
 
 import java.util.Set;
 
 public final class ManualInterventionDetector {
 
-    public boolean isManual(OrderTradeUpdateEvent event, Set<String> knownBotClientOrderIds) {
-        if (event.clientOrderId() == null || event.clientOrderId().isBlank()) {
-            return true;
+    public boolean isManual(UserStreamEvents.OrderTradeUpdateEvent event, Set<String> knownBotClientOrderIds) {
+        String clientOrderId = event.clientOrderId();
+        if (clientOrderId == null || clientOrderId.isBlank()) {
+            return false;
         }
-        return !knownBotClientOrderIds.contains(event.clientOrderId());
+        if (clientOrderId.startsWith("BOT_")) {
+            return false;
+        }
+        return !knownBotClientOrderIds.contains(clientOrderId);
     }
 
     public boolean isManualAlgo(String clientAlgoId, Set<String> knownBotClientAlgoIds) {
         if (clientAlgoId == null || clientAlgoId.isBlank()) {
-            return true;
+            return false;
+        }
+        if (clientAlgoId.startsWith("BOT_")) {
+            return false;
         }
         return !knownBotClientAlgoIds.contains(clientAlgoId);
     }
